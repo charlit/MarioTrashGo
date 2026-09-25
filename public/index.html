@@ -569,8 +569,28 @@
   // ---- Réglages tactiles mobiles (protégés : certains navigateurs intégrés
   // Instagram/TikTok bloquent ces API, et une erreur ici arrêterait tout) ----
   try {
-    document.addEventListener('touchmove', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
-    document.addEventListener('gesturestart', (e) => { if (e.cancelable) e.preventDefault(); });
+    // si la page est zoomée malgré tout, on laisse passer les gestes pour pouvoir dézoomer
+    // (sinon on reste bloqué dans le zoom, puisque glisser/pincer sont interdits)
+    const isZoomed = () => !!(window.visualViewport && window.visualViewport.scale > 1.01);
+    document.addEventListener('touchmove', (e) => {
+      if (isZoomed()) return;
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('gesturestart', (e) => {
+      if (isZoomed()) return;
+      if (e.cancelable) e.preventDefault();
+    });
+    // iOS ignore "user-scalable=no" : deux appuis rapides sur une touche déclenchent
+    // son zoom "double-tap". On annule donc le 2e touchend s'il arrive trop vite.
+    // (Les touches du jeu utilisent les pointer events, qui ne sont pas affectés.)
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      const isInput = e.target && e.target.tagName === 'INPUT';
+      if (!isInput && now - lastTouchEnd < 400 && e.cancelable) e.preventDefault();
+      lastTouchEnd = now;
+    }, { passive: false });
+    document.addEventListener('dblclick', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
     document.addEventListener('selectstart', (e) => {
       if (e.target && e.target.id === 'pseudoField') return;
       e.preventDefault();
@@ -877,10 +897,19 @@
     document.getElementById('leaderboardModal').classList.add('hidden');
   });
 
+  // Déclenche fn au relâcher du doigt (pointerup) : ne dépend pas du "click", que
+  // l'anti-zoom iOS peut annuler si on tape vite. Le click (clavier, souris) reste
+  // géré, sans double déclenchement.
+  function onTap(el, fn) {
+    let lastPointer = 0;
+    el.addEventListener('pointerup', (e) => { lastPointer = Date.now(); fn(e); });
+    el.addEventListener('click', (e) => { if (Date.now() - lastPointer > 600) fn(e); });
+  }
+
   const btnMute = document.getElementById('btnMute');
   function refreshMuteButton() { btnMute.textContent = Audio2.isMuted() ? '🔇' : '🔊'; }
   refreshMuteButton();
-  btnMute.addEventListener('click', () => {
+  onTap(btnMute, () => {
     Audio2.resume();
     const next = !Audio2.isMuted();
     Audio2.setMuted(next);
@@ -3008,7 +3037,7 @@
   ['pointerdown', 'touchstart', 'mousedown', 'click'].forEach((evt) => {
     btnPause.addEventListener(evt, (e) => e.stopPropagation());
   });
-  btnPause.addEventListener('click', () => setPaused(!paused));
+  onTap(btnPause, () => setPaused(!paused));
   pauseOverlay.addEventListener('pointerdown', (e) => { if (e.cancelable) e.preventDefault(); setPaused(false); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
