@@ -1734,9 +1734,11 @@
     // quelques étoiles pour Bayonne la nuit
     if (theme.key === 'bayonne') {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      for (let i = 0; i < 26; i++) {
-        const sx = ((i * 97 - camX * 0.1) % W + W) % W;
-        const sy = 70 + (i * 53) % 200;
+      // positions pseudo-aléatoires mais fixes (un simple i*k les alignait en diagonales)
+      const rnd = (n) => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
+      for (let i = 0; i < 34; i++) {
+        const sx = ((rnd(i) * W - camX * 0.1) % W + W) % W;
+        const sy = 60 + rnd(i + 100) * 260;
         ctx.fillRect(sx, sy, (i + frame / 20 | 0) % 7 === 0 ? 2 : 1, 1);
       }
     }
