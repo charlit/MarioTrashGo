@@ -15,8 +15,11 @@
     --pad-h: 118px;
     --safe-b: env(safe-area-inset-bottom, 0px);
     --safe-t: env(safe-area-inset-top, 0px);
-    --stage-w: min(calc(100vw - 16px), 460px, calc((100dvh - var(--pad-h) - var(--safe-b) - var(--safe-t) - 16px) * 390 / 620));
+    --canvas-h: 620;
+    --stage-w: min(calc(100vw - 16px), 460px, calc((100dvh - var(--pad-h) - var(--safe-b) - var(--safe-t) - 16px) * 390 / var(--canvas-h)));
   }
+  /* téléphone en portrait : la manette est DANS le jeu, dans le sous-sol sous le trottoir */
+  html.pad-in-game { --pad-h: 0px; --canvas-h: 750; }
   @media (hover: hover) and (pointer: fine) { :root { --pad-h: 0px; } }
   html, body {
     margin: 0;
@@ -53,7 +56,7 @@
     position: relative;
     container-type: inline-size;
     width: var(--stage-w);
-    aspect-ratio: 390 / 620;
+    aspect-ratio: 390 / var(--canvas-h);
   }
   canvas {
     display: block;
@@ -376,6 +379,22 @@
     box-shadow: 0 18px 30px -8px rgba(255, 47, 160, 0.4);
   }
   @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
+  /* manette posée sur le sous-sol dessiné par le jeu (zone sous le trottoir) */
+  html.pad-in-game canvas { border-bottom: 4px solid #ff2fa0; border-radius: 22px; }
+  html.pad-in-game #pad {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: calc(100% * 172 / 750);
+    padding: 0 5cqw 4px;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    z-index: 20;
+  }
   #pad .grp { display: flex; gap: 3cqw; align-items: center; }
 
   /* touche en relief : ombre dure dessous, elle s'enfonce quand on appuie */
@@ -873,7 +892,9 @@
   // ================================================================
   //  MONDE : grille de tuiles
   // ================================================================
-  const W = canvas.width, H = canvas.height;
+  // H = hauteur LOGIQUE du jeu (toujours 620). En mode téléphone portrait, le canvas
+  // est plus haut (sous-sol où se trouve la manette) : on dessine alors jusqu'à canvas.height.
+  const W = canvas.width, H = 620;
   const T = 30;                       // taille d'une tuile
   const ROWS = 15;
   const LEVEL_Y = H - ROWS * T;       // le niveau est ancré en bas, le ciel au-dessus
@@ -2864,17 +2885,51 @@
     drawPlayer();
     drawEffects();
     ctx.restore();
+    drawUnderground();
+    drawCityLabel();
+  }
 
-    // nom de la ville, petit repère discret comme dans TrashGO
+  // nom de la ville, petit repère discret comme dans TrashGO
+  // (au centre du sous-sol, au-dessus des touches, en mode téléphone)
+  function drawCityLabel() {
     ctx.font = '10px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.fillText(level.theme.name, 16, H - 12);
+    if (canvas.height > H) {
+      ctx.textAlign = 'center';
+      ctx.fillText(level.theme.name, W / 2, GROUND_Y + 34);
+      ctx.textAlign = 'left';
+    } else {
+      ctx.fillText(level.theme.name, 16, H - 12);
+    }
+  }
+
+  // Sous-sol sous le niveau (mode téléphone portrait) : le sol continue sous les
+  // colonnes pleines, et les trous du niveau descendent jusqu'en bas.
+  function drawUnderground() {
+    const extra = canvas.height - H;
+    if (extra <= 0 || !level) return;
+    const theme = level.theme;
+    const c0 = Math.floor(camX / T) - 1, c1 = c0 + Math.ceil(W / T) + 2;
+    const pit = ctx.createLinearGradient(0, H, 0, canvas.height);
+    pit.addColorStop(0, theme.sky[1]);
+    pit.addColorStop(1, '#07030d');
+    for (let c = c0; c <= c1; c++) {
+      const x = Math.round(c * T - camX);
+      const full = c < 0 || c >= level.cols || tileAt(c, ROWS - 1) === '#';
+      ctx.fillStyle = full ? '#0d0616' : pit;
+      ctx.fillRect(x, H, T, extra);
+      if (!full) continue;
+      // fines jointures de dalles souterraines
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      for (let y = H + 30; y < canvas.height; y += 30) ctx.fillRect(x, y, T, 1);
+      ctx.fillRect(x + (((c % 2) + 2) % 2 ? 0 : 15), H, 1, extra);
+    }
   }
 
   // écran d'intro "WORLD 1-1" façon Mario, aux couleurs néon
   function drawIntro() {
     ctx.fillStyle = '#0d0d12';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, canvas.height);
     ctx.textAlign = 'center';
     ctx.save();
     ctx.font = 'bold 34px "Courier New", monospace';
@@ -2911,6 +2966,7 @@
     ctx.translate(-Math.round(camX), 0);
     drawTiles();
     ctx.restore();
+    drawUnderground();
     camX = 0;
   }
 
@@ -2983,7 +3039,7 @@
     lastTime = now;
     while (acc >= STEP) { step(); acc -= STEP; }
 
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, canvas.height);
     if (state === 'ready') drawTitleBackdrop();
     else if (state === 'intro') drawIntro();
     else drawWorld();
@@ -3058,6 +3114,26 @@
   placeSysButtons();
   try { touchScreen.addEventListener('change', placeSysButtons); } catch (e) {}
 
+  // Téléphone en portrait : la manette passe DANS l'écran de jeu, posée sur un
+  // sous-sol de 130 px ajouté sous le niveau. En paysage / sur ordinateur, on revient
+  // à la mise en page normale (poignées latérales / pas de manette).
+  const PAD_EXTRA = 130;
+  const landscape = window.matchMedia('(orientation: landscape)');
+  const padEl = document.getElementById('pad');
+  function applyLayout() {
+    const inGame = touchScreen.matches && !landscape.matches;
+    const h = H + (inGame ? PAD_EXTRA : 0);
+    if (canvas.height !== h) canvas.height = h;
+    document.documentElement.classList.toggle('pad-in-game', inGame);
+    if (inGame) { if (padEl.parentElement !== stageEl) stageEl.appendChild(padEl); }
+    else if (padEl.parentElement !== document.body) document.body.appendChild(padEl);
+  }
+  applyLayout();
+  try {
+    touchScreen.addEventListener('change', applyLayout);
+    landscape.addEventListener('change', applyLayout);
+  } catch (e) {}
+
   // croix ◀ ▶ : chaque doigt posé dessus compte selon le côté où il se trouve,
   // et on peut glisser d'un côté à l'autre sans lever le pouce
   const dpad = document.getElementById('dpad');
@@ -3107,7 +3183,7 @@
       press, release,
       run(n) { for (let i = 0; i < n; i++) step(); },
       render() {
-        ctx.clearRect(0, 0, W, H);
+        ctx.clearRect(0, 0, W, canvas.height);
         if (state === 'ready') drawTitleBackdrop(); else if (state === 'intro') drawIntro(); else drawWorld();
         updateHud();
       },
