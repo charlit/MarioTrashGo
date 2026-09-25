@@ -1,0 +1,14 @@
+{
+  "name": "trashgo-world",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TrashGO World : TrashGO en mode plateforme façon Mario (jeu + classement + visites)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "geoip-lite": "^1.4.10"
+  }
+}

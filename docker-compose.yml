@@ -1,0 +1,13 @@
+services:
+  trashgo-world:
+    build: .
+    container_name: trashgo-world
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8080
+      # change cette valeur pour ton vrai mot de passe avant de lancer
+      - VISITS_KEY=change-moi-avant-de-publier
