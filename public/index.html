@@ -426,47 +426,60 @@
   /* croix ◀ ▶ d'un seul bloc : on glisse le pouce d'un côté à l'autre sans le lever */
   #dpad {
     display: flex;
-    gap: 2cqw;
-    width: 40cqw;
-    height: min(20cqw, 74px);
+    gap: 2.5cqw;
+    width: 48cqw;
+    height: min(23cqw, 90px);
     touch-action: none;
   }
   #dpad .half {
     flex: 1;
-    font-size: min(6.5cqw, 24px);
+    font-size: min(8cqw, 30px);
     pointer-events: none;
   }
   #dpad .half[data-dir="left"] { border-radius: 16px 6px 6px 16px; }
   #dpad .half[data-dir="right"] { border-radius: 6px 16px 16px 6px; }
 
-  #pad .sys { display: flex; flex-direction: column; gap: 2cqw; }
-  #pad .sys button {
-    position: static;
-    width: min(8.5cqw, 32px);
-    height: min(8.5cqw, 32px);
-    font-size: min(3.8cqw, 14px);
-    border-radius: 8px;
-    border-width: 1.5px;
-    box-shadow: 0 3px 0 #07040d;
+  /* ⏸ et 🔊 en haut à gauche de l'écran (écrans tactiles) ; au-dessus de l'écran PAUSE */
+  #sysTop {
+    position: absolute;
+    top: 9px;
+    left: 12px;
+    display: flex;
+    gap: 6px;
+    z-index: 26;
   }
+  #sysTop:empty { display: none; }
+  #sysTop button {
+    position: static;
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+    border-radius: 7px;
+    border-width: 1.5px;
+    box-shadow: 0 2px 0 #07040d;
+  }
+  #sysTop button.on { transform: translateY(2px); box-shadow: 0 0 0 #07040d; }
+  html.sys-top #hudTop { left: 78px; }
+  html.sys-top #hudSub { top: 42px; }
+  html.sys-top #combo { top: 62px; }
   #pad button.small {
     --c: #ffd400;
-    width: min(15cqw, 56px);
-    height: min(15cqw, 56px);
+    width: min(18cqw, 70px);
+    height: min(18cqw, 70px);
     border-radius: 50%;
-    font-size: min(2.9cqw, 11px);
+    font-size: min(3.3cqw, 12px);
     letter-spacing: 0.5px;
   }
   #pad button.jump {
     --c: #ff2fa0;
     --deep: #7a0d4b;
-    width: min(21cqw, 78px);
-    height: min(21cqw, 78px);
+    width: min(26cqw, 100px);
+    height: min(26cqw, 100px);
     border-radius: 50%;
     background: #ff2fa0;
     color: #0d0d12;
     border-color: #ffc2e3;
-    font-size: min(3.6cqw, 14px);
+    font-size: min(4.2cqw, 16px);
     letter-spacing: 1px;
   }
 
@@ -493,12 +506,10 @@
     #pad .grp.left { order: 0; border-right: none; border-radius: 26px 0 0 26px; }
     #stage { order: 1; }
     #pad .grp.right { order: 2; border-left: none; border-radius: 0 26px 26px 0; flex-direction: column-reverse; background: linear-gradient(270deg, #1d1330, #0d0616); }
-    #dpad { width: 124px; height: 62px; gap: 6px; }
-    #dpad .half { font-size: 22px; }
-    #pad .sys { flex-direction: row; gap: 10px; }
-    #pad .sys button { width: 32px; height: 32px; font-size: 14px; }
-    #pad button.small { width: 56px; height: 56px; font-size: 11px; }
-    #pad button.jump { width: 78px; height: 78px; font-size: 14px; }
+    #dpad { width: 132px; height: 76px; gap: 6px; }
+    #dpad .half { font-size: 26px; }
+    #pad button.small { width: 62px; height: 62px; font-size: 12px; }
+    #pad button.jump { width: 88px; height: 88px; font-size: 15px; }
   }
   #pauseOverlay {
     position: absolute;
@@ -531,6 +542,7 @@
   <div id="controlsHint">← → COURIR · ESPACE SAUT · X FIGURE</div>
   <button id="btnMute" type="button">🔊</button>
   <button id="btnPause" type="button" aria-label="Pause">⏸</button>
+  <div id="sysTop"></div>
   <div id="pauseOverlay" class="hidden"><div class="big">PAUSE</div><p>Touche l'écran pour reprendre</p></div>
   <canvas id="game" width="390" height="620"></canvas>
   <div id="overlay">
@@ -556,7 +568,6 @@
 <div id="pad">
   <div class="grp left">
     <div id="dpad"><div class="half key" data-dir="left">◀</div><div class="half key" data-dir="right">▶</div></div>
-    <div class="sys"></div>
   </div>
   <div class="grp right">
     <button type="button" class="key small" data-key="trick">FIGURE</button>
@@ -3131,13 +3142,14 @@
 
   // sur écran tactile, ⏸ et 🔊 passent de l'écran de jeu à la manette (vue dégagée)
   const touchScreen = window.matchMedia('(hover: none), (pointer: coarse)');
-  const padSys = document.querySelector('#pad .sys');
+  const sysTop = document.getElementById('sysTop');
   const stageEl = document.getElementById('stage');
   function placeSysButtons() {
-    const onPad = touchScreen.matches;
+    const onTouch = touchScreen.matches;
+    document.documentElement.classList.toggle('sys-top', onTouch);
     [btnPause, btnMute].forEach((b) => {
-      b.classList.toggle('key', onPad);
-      (onPad ? padSys : stageEl).appendChild(b);
+      b.classList.toggle('key', onTouch);
+      (onTouch ? sysTop : stageEl).appendChild(b);
     });
   }
   placeSysButtons();
