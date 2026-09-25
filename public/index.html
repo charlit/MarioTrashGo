@@ -374,18 +374,18 @@
   </div>
   <div id="combo">COMBO x1</div>
   <div id="milestoneBanner"></div>
-  <div id="controlsHint">← → ROULER · ESPACE SAUT · X FIGURE</div>
+  <div id="controlsHint">← → COURIR · ESPACE SAUT · X FIGURE</div>
   <button id="btnMute" type="button">🔊</button>
   <canvas id="game" width="390" height="620"></canvas>
   <div id="overlay">
     <h1>Trash<span>GO</span></h1>
-    <p class="tagline">SUPER SKATE WORLD</p>
+    <p class="tagline">SUPER TRASH WORLD</p>
     <div class="menuButtons">
       <button id="btnStart" type="button">START</button>
       <button id="btnScores" type="button">TOP 10</button>
     </div>
     <p style="margin-top:12px;">Traverse Biarritz, Anglet et Bayonne</p>
-    <p>Saute sur les cônes · Grind les rails · Casse les briques</p>
+    <p>Saute sur les cônes · Glisse sur les rails · Casse les briques</p>
     <p>Gâteau basque = grandir · Piment d'Espelette = invincible</p>
     <p class="credit">créé par Charles J</p>
   </div>
@@ -890,8 +890,7 @@
 
   let enemies = [], coins = [], powerups = [], particles = [], floatingTexts = [], popCoins = [], debris = [];
   let bumps = {}; // "c,r" -> frames d'animation de bloc cogné
-  let flyingBoard = null;
-  let wheelSpinAngle = 0;
+  let runPhase = 0; // cycle de course des jambes
 
   const player = {
     x: 60, y: 0, w: 20, h: 36, vx: 0, vy: 0,
@@ -904,7 +903,7 @@
   let grinding = false, grindPts = 0, grindFrames = 0;
   let combo = 1, comboTimer = 0;
   let canTrick = true, trick = null, trickCycleIndex = 0;
-  const TRICK_KINDS = ['kickflip', 'shuvit', 'threesixty'];
+  const TRICK_KINDS = ['salto', 'ecart', 'vrille'];
   let landTimer = 0;
   let stompChain = 0;
 
@@ -1023,7 +1022,6 @@
     coins = level.coins;
     powerups = []; particles = []; floatingTexts = []; popCoins = []; debris = [];
     bumps = {};
-    flyingBoard = null;
     clearPhase = null; playerHidden = false;
     timeLeft = 300; timeTick = 0;
     const startCol = checkpointReached ? level.def.checkpoint : 2;
@@ -1069,10 +1067,6 @@
     player.big = false;
     player.vx = 0;
     player.vy = fell ? 0 : -9;
-    if (!fell) {
-      // la planche s'échappe sous les pieds, comme dans TrashGO
-      flyingBoard = { x: player.x + player.w / 2, y: player.y + player.h - 4, rot: 0, vx: 3.5 * -player.facing, vy: -7.5, spin: 0.4, bounces: 0, settled: false };
-    }
   }
 
   function afterDeath() {
@@ -1182,19 +1176,19 @@
     canTrick = false;
     const kind = TRICK_KINDS[trickCycleIndex % TRICK_KINDS.length];
     trickCycleIndex++;
-    const rewards = { kickflip: 30, shuvit: 35, threesixty: 45 };
-    const labels = { kickflip: 'FLIP !', shuvit: 'SHOVE-IT !', threesixty: '360° !' };
+    const rewards = { salto: 30, ecart: 35, vrille: 45 };
+    const labels = { salto: 'SALTO !', ecart: 'GRAND ÉCART !', vrille: 'VRILLE !' };
     addScore(rewards[kind] * combo, player.x, player.y - 12, '#ffd400', labels[kind]);
     bumpCombo();
     Audio2.trickSfx();
-    trick = { kind, elapsed: 0, duration: kind === 'threesixty' ? 30 : 22 };
+    trick = { kind, elapsed: 0, duration: kind === 'salto' ? 28 : kind === 'vrille' ? 26 : 22 };
   }
 
   function endGrind() {
     if (!grinding) return;
     grinding = false;
     Audio2.stopGrindSfx();
-    if (grindPts > 0) addScore(grindPts, player.x, player.y - 12, '#7fffd4', 'GRIND!');
+    if (grindPts > 0) addScore(grindPts, player.x, player.y - 12, '#7fffd4', 'GLISSE!');
     grindPts = 0;
   }
 
@@ -1260,14 +1254,15 @@
     // ---- déplacement horizontal : ça roule, ça glisse un peu (on est en skate) ----
     const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
     const onGround = player.onGround;
-    const maxV = grinding ? 4.2 : 3.6;
+    const maxV = grinding ? 4.2 : 3.6; // grinding = glissade sur les rails
     if (dir !== 0) {
       player.facing = dir;
       const opposing = Math.sign(player.vx) === -dir && player.vx !== 0;
       const acc = onGround ? (opposing ? 0.45 : 0.24) : 0.2;
       player.vx += dir * acc;
     } else if (onGround && !grinding) {
-      player.vx *= 0.94;
+      // à pied on s'arrête vite (plus de glisse de skate)
+      player.vx *= 0.8;
       if (Math.abs(player.vx) < 0.05) player.vx = 0;
     }
     if (grinding) {
@@ -1328,7 +1323,7 @@
     if (trick) { trick.elapsed++; if (trick.elapsed >= trick.duration) trick = null; }
     if (landTimer > 0) landTimer--;
     if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) { combo = 1; comboEl.classList.remove('show'); } }
-    wheelSpinAngle += player.vx * 0.3;
+    if (player.onGround) runPhase += Math.abs(player.vx) * 0.14;
 
     if (player.invuln > 0) player.invuln--;
     if (player.star > 0) {
@@ -1487,7 +1482,6 @@
       player.vy = Math.min(player.vy + 0.45, 11);
       player.y += player.vy;
     }
-    updateFlyingBoard();
     updateParticles();
     if (stateTimer <= 0) afterDeath();
   }
@@ -1508,7 +1502,7 @@
       player.vy = Math.min(player.vy + GRAVITY, 11);
       moveX(player);
       moveY(player);
-      wheelSpinAngle += 0.6;
+      runPhase += 2 * 0.14;
       if (player.x > (level.def.flag + 6) * T + 20) {
         playerHidden = true;
         clearPhase = 'tally';
@@ -1533,20 +1527,6 @@
     }
     updateCamera();
     updateParticles();
-  }
-
-  // ---- planche qui s'échappe au crash (reprise de TrashGO) ----
-  function updateFlyingBoard() {
-    if (!flyingBoard || flyingBoard.settled) return;
-    const b = flyingBoard;
-    b.vy += GRAVITY; b.x += b.vx; b.y += b.vy; b.rot += b.spin;
-    const c = colOf(b.x), r = rowOf(b.y);
-    if (b.vy > 0 && isSolid(tileAt(c, r))) {
-      b.y = rowY(r);
-      b.vy *= -0.45; b.vx *= 0.7; b.spin *= 0.55; b.bounces++;
-      if (b.bounces >= 3 || Math.abs(b.vy) < 0.7) { b.vy = 0; b.vx = 0; b.spin = 0; b.settled = true; }
-    }
-    if (b.y > H + 40) b.settled = true;
   }
 
   // ================================================================
@@ -2170,45 +2150,81 @@
     ctx.restore();
   }
 
+  // Le sprite est découpé en deux : le haut du corps, et les deux jambes
+  // (à partir de la hanche) qui pivotent pour animer la course.
+  const SPR = {
+    w: 50, h: 134, hip: 91, legH: 40,
+    legs: [{ sx: 3, sw: 19, px: 15 }, { sx: 23, sw: 19, px: 34 }] // px = pivot de hanche (pixels source)
+  };
+
+  function drawSpriteLeg(leg, angle, kx, ky) {
+    ctx.save();
+    ctx.translate(leg.px * kx, SPR.hip * ky);
+    ctx.rotate(angle);
+    ctx.drawImage(charImg, leg.sx, SPR.hip, leg.sw, SPR.legH, (leg.sx - leg.px) * kx, 0, leg.sw * kx, SPR.legH * ky);
+    ctx.restore();
+  }
+
+  // angle des deux jambes (gauche, droite) selon ce que fait le personnage
+  function legAngles(airborne, dying) {
+    if (dying) {
+      const f = Math.sin(frame * 0.5) * 0.8;
+      return [f, -f];
+    }
+    if (trick && trick.kind === 'ecart') {
+      const s = Math.sin((trick.elapsed / trick.duration) * Math.PI) * 1.35;
+      return [-s, s];
+    }
+    if (grinding) return [0.35, -0.35];
+    if (airborne) return player.vy < 0 ? [0.6, -0.45] : [0.25, -0.3];
+    const amp = Math.min(Math.abs(player.vx) / 2.5, 1) * 0.65;
+    const a = Math.sin(runPhase) * amp;
+    return [a, -a];
+  }
+
+  // Le sprite d'origine regarde vers la GAUCHE : on le retourne (scale -facing)
+  // pour qu'il regarde là où il court. Dans le repère local, l'avant est donc vers -x.
   function drawPlayer() {
     if (playerHidden) return;
     if (player.invuln > 0 && Math.floor(player.invuln / 4) % 2 === 0) return;
     if (player.growFlash > 0 && Math.floor(player.growFlash / 5) % 2 === 0) return;
     ctx.save();
-    const drawH = player.h + 8;
+    const drawH = player.h + 2;
     const drawW = Math.round(drawH * 0.59);
+    const kx = drawW / SPR.w, ky = drawH / SPR.h;
     const px = player.x + player.w / 2 - drawW / 2;
     const py = player.y + player.h - drawH;
     const airborne = !player.onGround && state === 'playing';
+    const dying = state === 'dying';
+    const [aL, aR] = legAngles(airborne, dying);
 
     let squashX = 1, squashY = 1, bobY = 0;
     if (airborne) {
       const t = Math.min(Math.abs(player.vy) / 12, 1);
-      squashY = 1 + t * 0.16;
-      squashX = 1 - t * 0.10;
+      squashY = 1 + t * 0.08;
+      squashX = 1 - t * 0.05;
     } else if (landTimer > 0) {
       const t = landTimer / 10;
-      squashY = 1 - t * 0.24;
-      squashX = 1 + t * 0.18;
-    } else if (Math.abs(player.vx) > 0.3) {
-      const bob = Math.sin(frame * 0.35);
-      squashY = 1 + bob * 0.035;
-      squashX = 1 - bob * 0.025;
-      bobY = -Math.abs(bob) * 2;
+      squashY = 1 - t * 0.2;
+      squashX = 1 + t * 0.14;
+    } else {
+      // en course, la jambe tendue en biais raccourcit : le corps descend pour garder les pieds au sol
+      bobY = SPR.legH * ky * (1 - Math.cos(Math.max(Math.abs(aL), Math.abs(aR))));
     }
 
     const trickProgress = trick ? trick.elapsed / trick.duration : 0;
-    const bodySpin = (trick && trick.kind === 'threesixty') ? trickProgress * Math.PI * 2 : 0;
-    const dying = state === 'dying';
+    let bodySpin = 0;
+    if (trick && trick.kind === 'salto') bodySpin = trickProgress * Math.PI * 2 * player.facing;
+    if (trick && trick.kind === 'vrille') squashX *= Math.cos(trickProgress * Math.PI * 2);
 
     if (airborne || dying) {
       ctx.translate(px + drawW / 2, py + drawH / 2);
       ctx.rotate(bodySpin + (dying ? Math.PI * 0.08 : player.vx * 0.02));
-      ctx.scale(squashX * player.facing, squashY);
+      ctx.scale(-squashX * player.facing, squashY);
       ctx.translate(-drawW / 2, -drawH / 2);
     } else {
       ctx.translate(px + drawW / 2, py + drawH + bobY);
-      ctx.scale(squashX * player.facing, squashY);
+      ctx.scale(-squashX * player.facing, squashY);
       ctx.translate(-drawW / 2, -drawH);
     }
 
@@ -2218,88 +2234,21 @@
     }
     if (charImg.complete && charImg.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(charImg, 0, 0, drawW, drawH);
+      // jambe arrière d'abord, puis jambe avant, puis le corps par-dessus la hanche
+      drawSpriteLeg(SPR.legs[1], aR, kx, ky);
+      drawSpriteLeg(SPR.legs[0], aL, kx, ky);
+      // le buste penche vers l'avant, dans le sens de la course (pivot à la hanche),
+      // d'autant plus qu'on va vite ; en l'air la rotation globale s'en charge déjà
+      const lean = (airborne || dying) ? 0 : -0.2 * Math.max(-1, Math.min(1, player.vx * player.facing / 3.6));
+      ctx.save();
+      ctx.translate(SPR.w / 2 * kx, SPR.hip * ky);
+      ctx.rotate(lean);
+      ctx.translate(-SPR.w / 2 * kx, -SPR.hip * ky);
+      ctx.drawImage(charImg, 0, 0, SPR.w, SPR.hip + 1, 0, 0, drawW, (SPR.hip + 1) * ky);
+      ctx.restore();
     } else {
       ctx.fillStyle = '#ff2fa0';
       ctx.fillRect(0, 0, drawW, drawH);
-    }
-    ctx.shadowBlur = 0;
-
-    if (!dying) {
-      let boardTransform = null;
-      if (trick && trick.kind === 'kickflip') boardTransform = { rotateFlip: trickProgress * Math.PI * 2 };
-      else if (trick && trick.kind === 'shuvit') boardTransform = { rotateFlat: trickProgress * Math.PI * 2 };
-      drawSkateboardUnderFeet(drawW, drawH, boardTransform);
-    }
-    ctx.restore();
-  }
-
-  function drawSkateboardUnderFeet(drawW, drawH, transform) {
-    ctx.save();
-    const cx = drawW / 2, cy = drawH - 6;
-    if (transform && transform.rotateFlat) {
-      ctx.translate(cx, cy); ctx.rotate(transform.rotateFlat); ctx.translate(-cx, -cy);
-    } else if (transform && transform.rotateFlip) {
-      ctx.translate(cx, cy); ctx.scale(1, Math.cos(transform.rotateFlip)); ctx.translate(-cx, -cy);
-    }
-    const deckW = drawW + 12, deckX = -6, deckY = drawH - 7, deckH = 5, wheelR = 3;
-    const wheelY = deckY + deckH + wheelR - 1;
-    const wheelXs = [deckX + 6, deckX + deckW - 6];
-    for (const wx of wheelXs) {
-      ctx.fillStyle = '#1a1a1a';
-      ctx.beginPath();
-      ctx.arc(wx, wheelY, wheelR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#ffd400';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(wx + Math.cos(wheelSpinAngle) * (wheelR - 0.5), wheelY + Math.sin(wheelSpinAngle) * (wheelR - 0.5));
-      ctx.lineTo(wx - Math.cos(wheelSpinAngle) * (wheelR - 0.5), wheelY - Math.sin(wheelSpinAngle) * (wheelR - 0.5));
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#9aa0a6';
-    for (const wx of wheelXs) ctx.fillRect(wx - 4, deckY + deckH - 1, 8, 2);
-    ctx.fillStyle = '#111';
-    ctx.beginPath();
-    ctx.moveTo(deckX + 3, deckY + deckH);
-    ctx.lineTo(deckX, deckY + 1);
-    ctx.lineTo(deckX + 4, deckY - 2);
-    ctx.lineTo(deckX + deckW - 4, deckY - 2);
-    ctx.lineTo(deckX + deckW, deckY + 1);
-    ctx.lineTo(deckX + deckW - 3, deckY + deckH);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#2b2b2b';
-    ctx.fillRect(deckX + 4, deckY - 2, deckW - 8, 2);
-    ctx.fillStyle = '#ff2fa0';
-    ctx.fillRect(deckX + 3, deckY + deckH - 1, deckW - 6, 1);
-    ctx.restore();
-  }
-
-  function drawFlyingBoard() {
-    if (!flyingBoard) return;
-    const b = flyingBoard;
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.rotate(b.rot);
-    const deckW = 36, deckH = 5, wheelR = 3;
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    ctx.moveTo(-deckW / 2 + 3, deckH);
-    ctx.lineTo(-deckW / 2, -1);
-    ctx.lineTo(-deckW / 2 + 4, -3);
-    ctx.lineTo(deckW / 2 - 4, -3);
-    ctx.lineTo(deckW / 2, -1);
-    ctx.lineTo(deckW / 2 - 3, deckH);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#ff2fa0';
-    ctx.fillRect(-deckW / 2 + 4, -1, deckW - 8, 2);
-    ctx.fillStyle = '#1a1a1a';
-    for (const wx of [-deckW / 2 + 6, deckW / 2 - 6]) {
-      ctx.beginPath();
-      ctx.arc(wx, deckH + wheelR - 1, wheelR, 0, Math.PI * 2);
-      ctx.fill();
     }
     ctx.restore();
   }
@@ -2346,7 +2295,6 @@
       if (e.type === 'cone') drawCone(e); else drawGull(e);
     }
     drawPlayer();
-    drawFlyingBoard();
     drawEffects();
     ctx.restore();
 
@@ -2427,7 +2375,6 @@
       if (--stateTimer <= 0) startPlaying();
     } else {
       frame++;
-      updateFlyingBoard();
     }
   }
 
@@ -2512,7 +2459,25 @@
         updateHud();
       },
       info() { return { state, levelIndex, score, coinCount, lives, timeLeft, big: player.big, x: Math.round(player.x), y: Math.round(player.y), onGround: player.onGround, grinding, camX: Math.round(camX), enemies: enemies.length }; },
-      warp(col) { player.x = col * T; camX = Math.max(0, Math.min(player.x - W * 0.4, level.cols * T - W)); }
+      warp(col) { player.x = col * T; camX = Math.max(0, Math.min(player.x - W * 0.4, level.cols * T - W)); },
+      // démarre une partie neuve directement au niveau i (intro sautée)
+      start(i) {
+        overlay.classList.add('hidden');
+        score = 0; coinCount = 0; lives = 3; levelIndex = i || 0;
+        player.big = false; checkpointReached = false;
+        keys.left = keys.right = keys.jump = keys.trick = false;
+        beginIntro();
+        for (let k = 0; k < 160; k++) step();
+      },
+      place(x, y, vy) {
+        player.x = x; player.y = y; player.vx = 0; player.vy = vy || 0; player.onGround = false;
+        camX = Math.max(0, Math.min(player.x - W * 0.4, level.cols * T - W));
+      },
+      player() { return player; },
+      enemies() { return enemies; },
+      grid() { return level.grid.map((r) => r.join('')); },
+      def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length }; },
+      consts: { T, ROWS, LEVEL_Y, GROUND_ROW, GROUND_Y }
     };
   }
 

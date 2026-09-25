@@ -1,7 +1,7 @@
 # TrashGO World — TrashGO en mode Mario
 
 Même direction artistique que TrashGO (néon rose / aqua / jaune, Courier New,
-même skateur, pièces éclair, rails de grind, silhouettes de Biarritz, Anglet
+même personnage (désormais à pied, il court), pièces éclair, rails, silhouettes de Biarritz, Anglet
 et Bayonne, lauburu, bandeau SAPAR) mais en jeu de plateforme à défilement
 horizontal façon Super Mario.
 
@@ -9,15 +9,15 @@ horizontal façon Super Mario.
 
 - **3 niveaux** : 1-1 Biarritz, 1-2 Anglet (skatepark de plage), 1-3 Bayonne (de nuit).
   Ensuite ça reboucle en 2-1, 2-2… avec des ennemis plus rapides.
-- **Contrôles clavier** : ← → (ou Q/D) pour rouler, Espace / ↑ / Z pour sauter
+- **Contrôles clavier** : ← → (ou Q/D) pour courir, Espace / ↑ / Z pour sauter
   (maintenir = saut plus haut), X ou ↓ pour une figure en l'air.
 - **Mobile** : manette tactile sous l'écran (◀ ▶ FIGURE SAUT).
 - Cônes qui marchent = Goomba, mouettes = ennemis volants : on leur saute dessus.
 - Blocs `?` = pièces, briques cassables quand on est grand.
 - **Gâteau basque** = champignon (on grandit), **piment d'Espelette** = étoile (invincible).
 - Les tuyaux sont des **poubelles** vertes, l'arrivée est un **fronton** basque.
-- Rails : grind automatique à l'atterrissage, figures en l'air = points × combo
-  (attention, atterrir en pleine figure = BAIL, combo perdu).
+- Rails : glissade automatique à l'atterrissage. Figures en l'air (salto,
+  grand écart, vrille) = points × combo (atterrir en pleine figure = BAIL, combo perdu).
 - 3 vies, checkpoint à mi-niveau, 100 pièces = 1UP, chrono de 300.
 
 ## Lancer en local
