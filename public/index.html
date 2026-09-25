@@ -822,7 +822,7 @@
         L.enemy(112, 'gull', 6);
         L.rail(114, 2, 6); L.coins(115, 4, 4);
         L.row(124, 4, 'B?B?B?B'); L.enemy(125, 'cone'); L.enemy(127, 'cone'); L.enemy(129, 'cone');
-        L.enemy(133, 'gull', 5); L.pipe(138, 3); L.row(141, 6, 'M'); L.pipe(144, 5);
+        L.enemy(133, 'gull', 5); L.pipe(138, 3); L.row(141, 6, 'M'); L.pipe(144, 4);
         L.enemy(148, 'gull', 7);
         L.stairs(158, 8, 'up'); L.col(166, 8);
         L.row(176, 1, 'S');
@@ -1167,7 +1167,7 @@
       endGrind();
       addScore(15, player.x, player.y - 12, '#7fffd4', 'OUT!');
     }
-    player.vy = -(10.6 + Math.min(Math.abs(player.vx), 3.6) * 0.3);
+    player.vy = -(11.6 + Math.min(Math.abs(player.vx), 3.6) * 0.35);
     player.onGround = false;
     player.coyote = 0;
     player.jumpBuffer = 0;
