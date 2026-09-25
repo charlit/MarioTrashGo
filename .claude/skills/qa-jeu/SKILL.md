@@ -34,7 +34,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 12 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 15 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -87,7 +87,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/12, avec le détail des échecs) ;
+- le résultat de la suite (X/15, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

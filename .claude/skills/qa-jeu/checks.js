@@ -177,6 +177,51 @@
     check('chrono', g.info().state === 'dying' || g.info().lives === 2, 'état ' + g.info().state + ', vies ' + g.info().lives);
   });
 
+  // 13. 100 pièces = 1UP (on part de 99 et on prend le premier bloc ?)
+  safe('1UP', () => {
+    g.start(0);
+    if (!g.setCoins) { check('1UP', false, 'g.setCoins absent du mode debug'); return; }
+    g.setCoins(99);
+    const lives0 = g.info().lives;
+    g.warp(14); g.run(2);
+    g.press('jump'); g.run(25); g.release('jump'); g.run(20);
+    const i = g.info();
+    check('1UP', i.lives === lives0 + 1 && i.coinCount === 0, 'vies ' + lives0 + ' → ' + i.lives + ', pièces ' + i.coinCount);
+  });
+
+  // 14. Pause : le jeu et le chrono s'arrêtent, les commandes sont ignorées, puis ça repart
+  safe('pause', () => {
+    g.start(0);
+    const x0 = g.info().x, t0 = g.info().timeLeft;
+    g.setPaused(true);
+    g.press('right'); g.run(200); g.release('right');
+    const frozen = g.info().x === x0 && g.info().timeLeft === t0;
+    g.setPaused(false);
+    g.press('right'); g.run(30); g.release('right');
+    check('pause', frozen && g.info().x > x0, 'figé=' + frozen + ', avance après reprise ' + (g.info().x - x0) + ' px');
+  });
+
+  // 15. Croix tactile : on glisse le pouce de droite à gauche sans le lever
+  safe('croix glissante', () => {
+    const dpad = document.getElementById('dpad');
+    if (!dpad) { check('croix glissante', false, '#dpad absent'); return; }
+    g.start(0); g.warp(6); g.run(2);
+    // sur ordinateur la manette est masquée (largeur 0) : on l'affiche le temps du test
+    const pad = document.getElementById('pad');
+    const prevDisplay = pad.style.display;
+    if (getComputedStyle(pad).display === 'none') pad.style.display = 'flex';
+    const r = dpad.getBoundingClientRect();
+    const ev = (type, fx) => dpad.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', clientX: r.left + r.width * fx, clientY: r.top + r.height / 2 }));
+    ev('pointerdown', 0.8); g.run(20);
+    const right = g.keys.right && !g.keys.left;
+    ev('pointermove', 0.2); g.run(5);
+    const left = g.keys.left && !g.keys.right;
+    ev('pointerup', 0.2);
+    const released = !g.keys.left && !g.keys.right;
+    pad.style.display = prevDisplay;
+    check('croix glissante', right && left && released, 'droite=' + right + ', glisse gauche=' + left + ', relâché=' + released);
+  });
+
   g.start(0);
   const failed = results.filter((r) => !r.ok);
   return { total: results.length, echecs: failed.length, results };

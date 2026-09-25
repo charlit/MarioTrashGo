@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TrashGO">
+<link rel="icon" href="data:,">
 <title>TrashGO World</title>
 <style>
   :root { --pad-h: 112px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px); }
@@ -2877,8 +2878,14 @@
   pauseOverlay.addEventListener('pointerdown', (e) => { if (e.cancelable) e.preventDefault(); setPaused(false); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
-  // petite vibration sur téléphone (Android ; ignoré ailleurs)
-  function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+  // petite vibration sur téléphone (Android ; ignoré ailleurs). Seulement si on joue
+  // à la manette tactile : au clavier ça n'a pas de sens, et le navigateur la refuse
+  // (erreur en console) tant que l'écran n'a pas été touché.
+  let touchInput = false;
+  function buzz(ms) {
+    if (!touchInput) return;
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
+  }
 
   function step() {
     if (paused) return;
@@ -2945,6 +2952,7 @@
     const down = (e) => {
       if (e.cancelable) e.preventDefault();
       if (paused) return;
+      if (e.pointerType === 'touch') touchInput = true;
       Audio2.resume();
       btn.classList.add('on');
       try { btn.setPointerCapture(e.pointerId); } catch (err) {}
@@ -2977,6 +2985,7 @@
   dpad.addEventListener('pointerdown', (e) => {
     if (e.cancelable) e.preventDefault();
     if (paused) return;
+    if (e.pointerType === 'touch') touchInput = true;
     Audio2.resume();
     try { dpad.setPointerCapture(e.pointerId); } catch (err) {}
     dpadTouches.set(e.pointerId, dpadDir(e));
@@ -3030,6 +3039,7 @@
       grid() { return level.grid.map((r) => r.join('')); },
       def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length }; },
       setPaused, isPaused: () => paused,
+      setCoins(n) { coinCount = n; },
       consts: { T, ROWS, LEVEL_Y, GROUND_ROW, GROUND_Y }
     };
   }
