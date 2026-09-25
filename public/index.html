@@ -11,7 +11,12 @@
 <link rel="icon" href="data:,">
 <title>TrashGO World</title>
 <style>
-  :root { --pad-h: 112px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px); }
+  :root {
+    --pad-h: 118px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+    --stage-w: min(calc(100vw - 16px), 460px, calc((100dvh - var(--pad-h) - var(--safe-b) - var(--safe-t) - 16px) * 390 / 620));
+  }
   @media (hover: hover) and (pointer: fine) { :root { --pad-h: 0px; } }
   html, body {
     margin: 0;
@@ -47,7 +52,7 @@
   #stage {
     position: relative;
     container-type: inline-size;
-    width: min(calc(100vw - 16px), 460px, calc((100dvh - var(--pad-h) - var(--safe-b) - var(--safe-t) - 16px) * 390 / 620));
+    width: var(--stage-w);
     aspect-ratio: 390 / 620;
   }
   canvas {
@@ -342,69 +347,139 @@
     cursor: pointer;
   }
 
-  /* ---- Manette tactile (mobile uniquement) ---- */
+  /* ---- Manette tactile façon console portable (mobile uniquement) ----
+     L'écran de jeu et la manette forment un seul boîtier : même cadre néon rose,
+     la manette prolonge le sol sombre du niveau, touches en relief pixel. */
+  #btnPause { right: 40px; }
+  @media (hover: none), (pointer: coarse) {
+    /* pas de bordure entre l'écran et la manette : le sol du niveau continue dessous */
+    canvas { border-radius: 20px 20px 0 0; border-bottom: none; }
+  }
   #pad {
-    width: min(calc(100vw - 16px), 460px);
-    height: var(--pad-h);
+    width: var(--stage-w);
+    height: calc(var(--pad-h) + var(--safe-b));
+    padding: 0 12px var(--safe-b);
+    box-sizing: border-box;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 6px;
-    box-sizing: border-box;
+    position: relative;
+    container-type: inline-size;
     touch-action: none;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 30px, var(--lane, rgba(255,47,160,0.3)) 30px 44px, transparent 44px 60px) 0 10px / 100% 2px no-repeat,
+      #0d0616;
+    border: 4px solid #ff2fa0;
+    border-top: none;
+    border-radius: 0 0 26px 26px;
+    /* halo décalé vers le bas : il ne doit pas déborder sur l'écran de jeu */
+    box-shadow: 0 18px 30px -8px rgba(255, 47, 160, 0.4);
   }
   @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
-  #pad .grp { display: flex; gap: 12px; align-items: center; }
-  #pad button {
+  #pad .grp { display: flex; gap: 3cqw; align-items: center; }
+
+  /* touche en relief : ombre dure dessous, elle s'enfonce quand on appuie */
+  .key {
+    --c: #7fffd4;
+    --deep: #07040d;
     font-family: 'Courier New', monospace;
     font-weight: bold;
-    width: 66px;
-    height: 66px;
-    border-radius: 50%;
-    border: 2px solid #7fffd4;
-    background: rgba(127,255,212,0.08);
-    color: #7fffd4;
-    font-size: 22px;
-    box-shadow: 0 0 10px rgba(127,255,212,0.3);
-    touch-action: none;
+    color: var(--c);
+    background: #1d1330;
+    border: 2px solid var(--c);
+    border-radius: 12px;
+    box-shadow: 0 5px 0 var(--deep);
+    box-shadow: 0 5px 0 var(--deep), 0 0 12px color-mix(in srgb, var(--c) 30%, transparent);
     padding: 0;
+    touch-action: none;
+    transition: transform 0.05s, box-shadow 0.05s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  #pad button.small { width: 54px; height: 54px; font-size: 11px; letter-spacing: 1px; border-color: #ffd400; color: #ffd400; background: rgba(255,212,0,0.08); box-shadow: 0 0 10px rgba(255,212,0,0.3); }
-  #pad button.jump { width: 76px; height: 76px; font-size: 13px; letter-spacing: 1px; border-color: #ff2fa0; color: #0d0d12; background: #ff2fa0; box-shadow: 0 0 14px rgba(255,47,160,0.6); }
-  #pad button.on { filter: brightness(1.5); transform: scale(0.94); }
-  #btnPause { right: 40px; }
-  #pad { padding-bottom: var(--safe-b); box-sizing: content-box; }
+  .key.on {
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 var(--deep);
+    box-shadow: 0 1px 0 var(--deep), 0 0 18px color-mix(in srgb, var(--c) 60%, transparent);
+    filter: brightness(1.3);
+  }
+
   /* croix ◀ ▶ d'un seul bloc : on glisse le pouce d'un côté à l'autre sans le lever */
   #dpad {
     display: flex;
-    width: 156px;
-    height: 74px;
-    border: 2px solid #7fffd4;
-    border-radius: 37px;
-    overflow: hidden;
-    background: rgba(127,255,212,0.06);
-    box-shadow: 0 0 10px rgba(127,255,212,0.3);
+    gap: 2cqw;
+    width: 40cqw;
+    height: min(20cqw, 74px);
     touch-action: none;
   }
   #dpad .half {
     flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #7fffd4;
-    font-size: 24px;
+    font-size: min(6.5cqw, 24px);
     pointer-events: none;
   }
-  #dpad .half + .half { border-left: 1px solid rgba(127,255,212,0.35); }
-  #dpad .half.on { background: rgba(127,255,212,0.28); }
-  /* téléphone à l'horizontale : commandes de part et d'autre de l'écran de jeu */
+  #dpad .half[data-dir="left"] { border-radius: 16px 6px 6px 16px; }
+  #dpad .half[data-dir="right"] { border-radius: 6px 16px 16px 6px; }
+
+  #pad .sys { display: flex; flex-direction: column; gap: 2cqw; }
+  #pad .sys button {
+    position: static;
+    width: min(8.5cqw, 32px);
+    height: min(8.5cqw, 32px);
+    font-size: min(3.8cqw, 14px);
+    border-radius: 8px;
+    border-width: 1.5px;
+    box-shadow: 0 3px 0 #07040d;
+  }
+  #pad button.small {
+    --c: #ffd400;
+    width: min(15cqw, 56px);
+    height: min(15cqw, 56px);
+    border-radius: 50%;
+    font-size: min(2.9cqw, 11px);
+    letter-spacing: 0.5px;
+  }
+  #pad button.jump {
+    --c: #ff2fa0;
+    --deep: #7a0d4b;
+    width: min(21cqw, 78px);
+    height: min(21cqw, 78px);
+    border-radius: 50%;
+    background: #ff2fa0;
+    color: #0d0d12;
+    border-color: #ffc2e3;
+    font-size: min(3.6cqw, 14px);
+    letter-spacing: 1px;
+  }
+
+  /* téléphone à l'horizontale : deux poignées accrochées de part et d'autre de l'écran */
   @media (orientation: landscape) and (pointer: coarse) {
-    :root { --pad-h: 0px; }
-    body { flex-direction: row; gap: 12px; padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
+    :root {
+      --pad-h: 0px;
+      --stage-w: min(calc((100dvh - var(--safe-b) - var(--safe-t) - 16px) * 390 / 620), calc(100vw - 330px));
+    }
+    body { flex-direction: row; gap: 0; padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
+    canvas { border-radius: 0; border-bottom: 4px solid #ff2fa0; }
     #pad { display: contents; }
-    #pad .grp:first-child { order: 0; }
-    #stage { order: 1; width: min(calc((100dvh - 16px) * 390 / 620), calc(100vw - 360px)); }
-    #pad .grp:last-child { order: 2; flex-direction: column-reverse; gap: 14px; }
+    #pad .grp {
+      height: calc(var(--stage-w) * 620 / 390);
+      width: 150px;
+      box-sizing: border-box;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      background: linear-gradient(90deg, #1d1330, #0d0616);
+      border: 4px solid #ff2fa0;
+      box-shadow: 0 0 30px rgba(255, 47, 160, 0.4);
+    }
+    #pad .grp.left { order: 0; border-right: none; border-radius: 26px 0 0 26px; }
+    #stage { order: 1; }
+    #pad .grp.right { order: 2; border-left: none; border-radius: 0 26px 26px 0; flex-direction: column-reverse; background: linear-gradient(270deg, #1d1330, #0d0616); }
+    #dpad { width: 124px; height: 62px; gap: 6px; }
+    #dpad .half { font-size: 22px; }
+    #pad .sys { flex-direction: row; gap: 10px; }
+    #pad .sys button { width: 32px; height: 32px; font-size: 14px; }
+    #pad button.small { width: 56px; height: 56px; font-size: 11px; }
+    #pad button.jump { width: 78px; height: 78px; font-size: 14px; }
   }
   #pauseOverlay {
     position: absolute;
@@ -460,12 +535,13 @@
     </div>
   </div>
 <div id="pad">
-  <div class="grp">
-    <div id="dpad"><div class="half" data-dir="left">◀</div><div class="half" data-dir="right">▶</div></div>
+  <div class="grp left">
+    <div id="dpad"><div class="half key" data-dir="left">◀</div><div class="half key" data-dir="right">▶</div></div>
+    <div class="sys"></div>
   </div>
-  <div class="grp">
-    <button type="button" class="small" data-key="trick">FIGURE</button>
-    <button type="button" class="jump" data-key="jump">SAUT</button>
+  <div class="grp right">
+    <button type="button" class="key small" data-key="trick">FIGURE</button>
+    <button type="button" class="key jump" data-key="jump">SAUT</button>
   </div>
 </div>
 
@@ -1097,6 +1173,8 @@
     combo = 1; comboTimer = 0; comboEl.classList.remove('show');
     trick = null; canTrick = true; stompChain = 0; landTimer = 0;
     flagY = rowY(GROUND_ROW - 10) + 6;
+    // le marquage au sol de la manette prend la couleur de la ville, comme le sol du jeu
+    try { document.documentElement.style.setProperty('--lane', rgba(level.theme.accent, 0.3)); } catch (e) {}
   }
 
   function startPlaying() {
@@ -2965,6 +3043,20 @@
     btn.addEventListener('lostpointercapture', up);
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   });
+
+  // sur écran tactile, ⏸ et 🔊 passent de l'écran de jeu à la manette (vue dégagée)
+  const touchScreen = window.matchMedia('(hover: none), (pointer: coarse)');
+  const padSys = document.querySelector('#pad .sys');
+  const stageEl = document.getElementById('stage');
+  function placeSysButtons() {
+    const onPad = touchScreen.matches;
+    [btnPause, btnMute].forEach((b) => {
+      b.classList.toggle('key', onPad);
+      (onPad ? padSys : stageEl).appendChild(b);
+    });
+  }
+  placeSysButtons();
+  try { touchScreen.addEventListener('change', placeSysButtons); } catch (e) {}
 
   // croix ◀ ▶ : chaque doigt posé dessus compte selon le côté où il se trouve,
   // et on peut glisser d'un côté à l'autre sans lever le pouce
