@@ -1893,7 +1893,8 @@
     const horizon = GROUND_Y - 84;
     const far = makeLayer(0.12, 11, (g, rnd, wrap) => {
       for (let x = 0; x < LAYER_W;) {
-        const w = 34 + rnd() * 50, h = 40 + rnd() * 70;
+        let w = 34 + rnd() * 50; const h = 40 + rnd() * 70;
+        if (x + w > LAYER_W) { w = LAYER_W - x; if (w < 16) break; }
         const roof = ['mansard', 'mansard', 'flat', 'dome', 'gable'][Math.floor(rnd() * 5)];
         const bx = x;
         wrap(bx, w, (xx) => building(g, rnd, xx, horizon, w, h, {
@@ -1939,6 +1940,7 @@
       }
       for (let x = 30; x < LAYER_W;) {
         const w = 40 + rnd() * 40, h = 28 + rnd() * 30;
+        if (x + w > LAYER_W - 30) break;
         const bx = x;
         wrap(bx, w, (xx) => building(g, rnd, xx, base, w, h, {
           color: '#1b393e', roof: 'gable', roofColor: '#3b2f33',
@@ -1957,6 +1959,7 @@
         if (kind < 0.45) {
           // cabine de plage rayée
           const w = 26, h = 34, stripe = accents[Math.floor(rnd() * 3)];
+          if (x + w > LAYER_W - 20) break;
           const bx = x;
           wrap(bx, w, (xx) => {
             g.fillStyle = '#16323a'; g.fillRect(xx, base - h, w, h);
@@ -1970,6 +1973,7 @@
         } else if (kind < 0.85) {
           // surf shop / bar avec store et enseigne néon
           const w = 70 + rnd() * 40, h = 48 + rnd() * 26;
+          if (x + w > LAYER_W - 20) break;
           const bx = x, text = signs[si++ % signs.length], color = accents[Math.floor(rnd() * 3)];
           wrap(bx, w, (xx) => {
             building(g, rnd, xx, base, w, h, { color: '#17333b', roof: 'flat',
@@ -1985,6 +1989,7 @@
           x += w + 14 + rnd() * 30;
         } else {
           // poste de secours sur pilotis, drapeau vert
+          if (x + 30 > LAYER_W - 20) break;
           const bx = x;
           wrap(bx, 30, (xx) => {
             g.fillStyle = '#0f2328';
@@ -2028,7 +2033,8 @@
     const far = makeLayer(0.1, 31, (g, rnd, wrap) => {
       const base = GROUND_Y - 30;
       for (let x = 0; x < LAYER_W;) {
-        const w = 26 + rnd() * 34, h = 70 + rnd() * 90;
+        let w = 26 + rnd() * 34; const h = 70 + rnd() * 90;
+        if (x + w > LAYER_W) { w = LAYER_W - x; if (w < 14) break; }
         const bx = x;
         wrap(bx, w, (xx) => building(g, rnd, xx, base, w, h, {
           color: '#2b1e3f', roof: rnd() < 0.7 ? 'gable' : 'flat',
@@ -2055,7 +2061,8 @@
       const signs = ['BAR', 'PINTXOS', 'TXOKO', 'HOTEL', 'JAMBON', 'CAFÉ'];
       let si = 0;
       for (let x = 0; x < LAYER_W;) {
-        const w = 34 + Math.floor(rnd() * 18), floors = 3 + Math.floor(rnd() * 4), h = 20 + floors * 20;
+        let w = 34 + Math.floor(rnd() * 18); const floors = 3 + Math.floor(rnd() * 4), h = 20 + floors * 20;
+        if (x + w > LAYER_W) { w = LAYER_W - x; if (w < 22) break; }
         const body = bodies[Math.floor(rnd() * bodies.length)];
         const sh = shutters[Math.floor(rnd() * shutters.length)];
         const sign = rnd() < 0.35 ? signs[si++ % signs.length] : null;
