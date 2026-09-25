@@ -11,7 +11,11 @@ horizontal façon Super Mario.
   Ensuite ça reboucle en 2-1, 2-2… avec des ennemis plus rapides.
 - **Contrôles clavier** : ← → (ou Q/D) pour courir, Espace / ↑ / Z pour sauter
   (maintenir = saut plus haut), X ou ↓ pour une figure en l'air.
-- **Mobile** : manette tactile sous l'écran (◀ ▶ FIGURE SAUT).
+- **Mobile** : manette tactile sous l'écran — croix ◀ ▶ d'un seul bloc (on glisse le
+  pouce d'un côté à l'autre), FIGURE, SAUT. En paysage, les commandes passent de
+  chaque côté du jeu. Bouton ⏸ (ou P / Échap), pause automatique quand on quitte
+  l'appli, vibration quand on écrase un ennemi ou qu'on est touché (Android).
+  Ajouté à l'écran d'accueil, le jeu s'ouvre en plein écran.
 - Cônes qui marchent = Goomba, mouettes = ennemis volants : on leur saute dessus.
 - Blocs `?` = pièces, briques cassables quand on est grand.
 - **Gâteau basque** = champignon (on grandit), **piment d'Espelette** = étoile (invincible).

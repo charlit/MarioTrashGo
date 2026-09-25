@@ -67,8 +67,14 @@ Vérifie :
 - **Figures** : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient).
 - **Décors** : Biarritz (vagues, rocher, phare), Anglet (dunes, planches de surf), Bayonne (nuit, étoiles, lauburu).
   Vérifie aussi les poubelles vertes, les blocs `?` jaunes, le drapeau au lauburu et le fronton « ONGI ETORRI ».
-- **Mobile** : `resize_window` en preset `mobile`, puis recharge la page. La manette ◀ ▶ FIGURE SAUT doit s'afficher
-  sous le canvas, sans défilement horizontal. Remets ensuite le preset `desktop`.
+- **Mobile** : `resize_window` en preset `mobile`, puis recharge la page. La manette doit s'afficher sous le canvas,
+  sans défilement horizontal. Envoie des `PointerEvent` (`pointerType: 'touch'`, `clientX`) sur `#dpad` :
+  un `pointerdown` à droite doit activer `keys.right`, puis un `pointermove` vers la gauche **sans pointerup**
+  doit passer à `keys.left`. Vérifie aussi que ⏸ fige le jeu et le chrono (`__tg.isPaused()`).
+  - **Paysage** : une taille personnalisée n'émule pas le tactile. Recopie les règles `@media (orientation: landscape)`
+    dans un `<style>` temporaire, avec `#pad { display: contents !important }`, à 812×375. Tu dois voir la croix à gauche,
+    le jeu au centre, SAUT et FIGURE à droite, et le texte du haut sur une seule ligne.
+  - Remets ensuite le preset `desktop`.
 - **HUD** : le score, les pièces ⚡, le monde, le chrono ⏱ (rouge sous 100) et les vies ♥ se mettent à jour.
 
 ## 5. Ce qui n'est pas testable en local
