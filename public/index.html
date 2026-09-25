@@ -1534,8 +1534,12 @@
   // ================================================================
   function drawBiarritzOceanLayer(scroll) {
     const waveY = GROUND_Y - 70;
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    ctx.fillRect(0, waveY - 10, W, 90);
+    // mer opaque : la ville Belle Époque reste de l'autre côté de la baie
+    const sea = ctx.createLinearGradient(0, waveY - 14, 0, GROUND_Y);
+    sea.addColorStop(0, '#1d4a62');
+    sea.addColorStop(1, '#0f2c3d');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, waveY - 14, W, GROUND_Y - waveY + 14);
     const layers = [
       { a: 0.22, lw: 1.5, step: 60, dy: -6, amp: 6, f: 0.15 },
       { a: 0.32, lw: 2, step: 46, dy: 10, amp: 7, f: 0.3 },
@@ -1723,6 +1727,392 @@
   }
   function rgba(hex, a) { const [r, g, b] = hexToRgb(hex); return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'; }
 
+  // ================================================================
+  //  DÉCOR DE VILLE : couches de parallaxe pré-dessinées
+  // ================================================================
+  // Chaque couche est peinte UNE fois dans un canvas hors écran de LAYER_W px
+  // de large (raccordable bout à bout), puis simplement recopiée à chaque image.
+  const LAYER_W = 1560;
+  const cityCache = {};
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeLayer(factor, seed, paint) {
+    const c = document.createElement('canvas');
+    c.width = LAYER_W; c.height = H;
+    const g = c.getContext('2d');
+    const rnd = mulberry32(seed);
+    // wrap(x, w, fn) : dessine aussi la copie décalée si l'élément déborde du bord droit
+    const wrap = (x, w, fn) => { fn(x); if (x + w > LAYER_W) fn(x - LAYER_W); };
+    paint(g, rnd, wrap);
+    return { c, factor };
+  }
+
+  function drawLayer(L) {
+    const off = -(((camX * L.factor) % LAYER_W) + LAYER_W) % LAYER_W;
+    ctx.drawImage(L.c, Math.round(off), 0);
+    if (off + LAYER_W < W) ctx.drawImage(L.c, Math.round(off + LAYER_W), 0);
+  }
+
+  // halo lumineux doux (lampadaires, fenêtres, néons)
+  function glow(g, x, y, r, color, a) {
+    const grd = g.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, rgba(color, a));
+    grd.addColorStop(1, rgba(color, 0));
+    g.fillStyle = grd;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  // Immeuble générique : corps, toit, grille de fenêtres (allumées ou non),
+  // volets basques et colombages en option.
+  function building(g, rnd, x, base, w, h, o) {
+    g.fillStyle = o.color;
+    g.fillRect(x, base - h, w, h);
+    const top = base - h;
+    g.fillStyle = o.roofColor || o.color;
+    if (o.roof === 'gable') {
+      g.beginPath();
+      g.moveTo(x - 3, top); g.lineTo(x + w / 2, top - Math.min(22, w * 0.35)); g.lineTo(x + w + 3, top);
+      g.closePath(); g.fill();
+    } else if (o.roof === 'mansard') {
+      g.beginPath();
+      g.moveTo(x - 2, top); g.lineTo(x + 5, top - 12); g.lineTo(x + w - 5, top - 12); g.lineTo(x + w + 2, top);
+      g.closePath(); g.fill();
+      // lucarnes
+      g.fillStyle = o.color;
+      for (let lx = x + 8; lx < x + w - 12; lx += 16) g.fillRect(lx, top - 10, 5, 6);
+    } else if (o.roof === 'dome') {
+      g.beginPath();
+      g.arc(x + w / 2, top, Math.min(w * 0.3, 16), Math.PI, 0);
+      g.fill();
+      g.fillRect(x + w / 2 - 1, top - Math.min(w * 0.3, 16) - 7, 2, 7);
+    } else if (o.roof === 'overhang') {
+      // toit débordant typique des maisons basques
+      g.fillRect(x - 5, top - 5, w + 10, 5);
+      g.beginPath();
+      g.moveTo(x - 5, top - 5); g.lineTo(x + w / 2, top - 14); g.lineTo(x + w + 5, top - 5);
+      g.closePath(); g.fill();
+    } else {
+      g.fillRect(x - 1, top - 3, w + 2, 3);
+    }
+    if (!o.win) return;
+    const wn = o.win;
+    const cols = Math.max(1, Math.floor((w - wn.mx * 2 + wn.gx) / (wn.w + wn.gx)));
+    const rows = Math.max(1, Math.floor((h - wn.top - wn.bottom + wn.gy) / (wn.h + wn.gy)));
+    const startX = x + (w - (cols * wn.w + (cols - 1) * wn.gx)) / 2;
+    for (let r = 0; r < rows; r++) {
+      const wy = top + wn.top + r * (wn.h + wn.gy);
+      // colombages : poutres sombres entre les étages
+      if (o.timber) {
+        g.fillStyle = o.timber;
+        g.fillRect(x, wy - wn.gy / 2 - 1, w, 2);
+        if (r % 2 === 0) {
+          g.beginPath();
+          g.moveTo(x + 2, wy + wn.h); g.lineTo(x + 8, wy - wn.gy / 2);
+          g.moveTo(x + w - 2, wy + wn.h); g.lineTo(x + w - 8, wy - wn.gy / 2);
+          g.strokeStyle = o.timber; g.lineWidth = 1.5; g.stroke();
+        }
+      }
+      for (let c = 0; c < cols; c++) {
+        const wx = startX + c * (wn.w + wn.gx);
+        const lit = rnd() < wn.lit;
+        if (o.shutters) {
+          g.fillStyle = o.shutters;
+          g.fillRect(wx - 3, wy, 3, wn.h);
+          g.fillRect(wx + wn.w, wy, 3, wn.h);
+        }
+        g.fillStyle = lit ? rgba(wn.color, wn.alpha * (0.7 + rnd() * 0.3)) : (wn.dark || 'rgba(0,0,0,0.35)');
+        g.fillRect(wx, wy, wn.w, wn.h);
+        if (lit && wn.glow) glow(g, wx + wn.w / 2, wy + wn.h / 2, wn.w * 2.2, wn.color, 0.12);
+      }
+    }
+  }
+
+  // enseigne néon (texte lumineux dans un cadre), fidèle à la DA de TrashGO
+  function neonSign(g, x, y, text, color) {
+    g.save();
+    g.font = 'bold 9px "Courier New", monospace';
+    const tw = g.measureText(text).width;
+    g.fillStyle = 'rgba(8,6,14,0.85)';
+    g.fillRect(x - 3, y - 9, tw + 6, 12);
+    g.shadowColor = color; g.shadowBlur = 8;
+    g.strokeStyle = color; g.lineWidth = 1;
+    g.strokeRect(x - 3, y - 9, tw + 6, 12);
+    g.fillStyle = color;
+    g.fillText(text, x, y);
+    g.restore();
+  }
+
+  function lampPost(g, x, base, h, color, lightColor) {
+    g.fillStyle = color;
+    g.fillRect(x - 1, base - h, 2, h);
+    g.fillRect(x - 3, base - 3, 6, 3);
+    g.fillRect(x - 1, base - h, 8, 2);
+    g.fillRect(x + 5, base - h, 4, 4);
+    glow(g, x + 7, base - h + 4, 26, lightColor, 0.35);
+    g.fillStyle = lightColor;
+    g.fillRect(x + 6, base - h + 3, 2, 2);
+  }
+
+  function palmTree(g, x, base, h, color) {
+    g.strokeStyle = color; g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(x, base); g.quadraticCurveTo(x + 8, base - h / 2, x + 4, base - h);
+    g.stroke();
+    g.fillStyle = color;
+    const cx = x + 4, cy = base - h;
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI + (i / 6) * Math.PI + (i % 2 ? 0.15 : -0.1);
+      g.beginPath();
+      g.moveTo(cx, cy);
+      g.quadraticCurveTo(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14 - 6, cx + Math.cos(a) * 24, cy + Math.sin(a) * 12 + 8);
+      g.quadraticCurveTo(cx + Math.cos(a) * 12, cy + Math.sin(a) * 10, cx, cy + 2);
+      g.fill();
+    }
+  }
+
+  function umbrellaPine(g, x, base, h, color) {
+    g.fillStyle = color;
+    g.fillRect(x - 2, base - h, 4, h);
+    g.beginPath();
+    g.ellipse(x, base - h, 26, 11, 0, 0, Math.PI * 2);
+    g.ellipse(x - 14, base - h + 5, 16, 8, 0, 0, Math.PI * 2);
+    g.ellipse(x + 15, base - h + 4, 15, 8, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // ---- BIARRITZ : front de mer Belle Époque de l'autre côté de la baie ----
+  function buildBiarritz() {
+    const horizon = GROUND_Y - 84;
+    const far = makeLayer(0.12, 11, (g, rnd, wrap) => {
+      for (let x = 0; x < LAYER_W;) {
+        const w = 34 + rnd() * 50, h = 40 + rnd() * 70;
+        const roof = ['mansard', 'mansard', 'flat', 'dome', 'gable'][Math.floor(rnd() * 5)];
+        const bx = x;
+        wrap(bx, w, (xx) => building(g, rnd, xx, horizon, w, h, {
+          color: '#1a3b50', roof,
+          win: { w: 3, h: 4, gx: 5, gy: 7, mx: 5, top: 8, bottom: 6, lit: 0.3, color: '#ffd8a8', alpha: 0.7 }
+        }));
+        x += w + 2 + rnd() * 6;
+      }
+      // Hôtel du Palais (long bâtiment à coupoles)
+      building(g, rnd, 380, horizon, 230, 92, { color: '#1c3f55', roof: 'mansard', win: { w: 4, h: 5, gx: 7, gy: 9, mx: 8, top: 10, bottom: 8, lit: 0.45, color: '#ffd8a8', alpha: 0.8 } });
+      for (const dx of [20, 115, 210]) building(g, rnd, 380 + dx - 12, horizon - 92, 24, 14, { color: '#1c3f55', roof: 'dome' });
+      // église orthodoxe au bulbe doré
+      building(g, rnd, 1040, horizon, 34, 60, { color: '#1c3f55', roof: 'flat', win: { w: 4, h: 7, gx: 6, gy: 10, mx: 6, top: 10, bottom: 10, lit: 0.6, color: '#ffd8a8', alpha: 0.7 } });
+      g.fillStyle = '#8a7440';
+      g.beginPath(); g.ellipse(1057, horizon - 68, 11, 12, 0, 0, Math.PI * 2); g.fill();
+      g.fillRect(1056, horizon - 88, 2, 10);
+      // phare au loin, avec son faisceau
+      g.fillStyle = '#23465c';
+      g.beginPath(); g.moveTo(1420, horizon); g.lineTo(1426, horizon - 120); g.lineTo(1436, horizon - 120); g.lineTo(1442, horizon); g.fill();
+      g.fillRect(1424, horizon - 128, 14, 8);
+      glow(g, 1431, horizon - 124, 40, '#ffe9a8', 0.5);
+    });
+    const near = makeLayer(0.75, 13, (g, rnd, wrap) => {
+      const base = GROUND_Y;
+      // balustrade de la promenade
+      g.fillStyle = '#0a1a24';
+      g.fillRect(0, base - 22, LAYER_W, 3);
+      g.fillRect(0, base - 6, LAYER_W, 2);
+      for (let x = 2; x < LAYER_W; x += 8) g.fillRect(x, base - 19, 3, 13);
+      for (let x = 60; x < LAYER_W; x += 260) wrap(x, 30, (xx) => palmTree(g, xx, base - 22, 70 + rnd() * 20, '#07141c'));
+      for (let x = 190; x < LAYER_W; x += 260) wrap(x, 12, (xx) => lampPost(g, xx, base - 22, 58, '#0a1a24', '#ffd8a8'));
+    });
+    return { far, near, horizon };
+  }
+
+  // ---- ANGLET : pinède, cabines de plage, surf shops, ganivelles ----
+  function buildAnglet() {
+    const far = makeLayer(0.12, 21, (g, rnd, wrap) => {
+      const base = GROUND_Y - 10;
+      for (let x = 0; x < LAYER_W; x += 38 + rnd() * 40) {
+        const px = x, ph = 60 + rnd() * 50;
+        wrap(px, 30, (xx) => umbrellaPine(g, xx, base, ph, '#1f4247'));
+      }
+      for (let x = 30; x < LAYER_W;) {
+        const w = 40 + rnd() * 40, h = 28 + rnd() * 30;
+        const bx = x;
+        wrap(bx, w, (xx) => building(g, rnd, xx, base, w, h, {
+          color: '#1b393e', roof: 'gable', roofColor: '#3b2f33',
+          win: { w: 4, h: 5, gx: 7, gy: 8, mx: 7, top: 7, bottom: 6, lit: 0.35, color: '#ffe9a8', alpha: 0.7 }
+        }));
+        x += w + 40 + rnd() * 90;
+      }
+    });
+    const mid = makeLayer(0.32, 22, (g, rnd, wrap) => {
+      const base = GROUND_Y;
+      const signs = ['SURF', 'GLACES', 'CHURROS', 'SURF SHOP', 'BAR', 'LOCATION'];
+      const accents = ['#7fffd4', '#ff2fa0', '#ffd400'];
+      let si = 0;
+      for (let x = 20; x < LAYER_W;) {
+        const kind = rnd();
+        if (kind < 0.45) {
+          // cabine de plage rayée
+          const w = 26, h = 34, stripe = accents[Math.floor(rnd() * 3)];
+          const bx = x;
+          wrap(bx, w, (xx) => {
+            g.fillStyle = '#16323a'; g.fillRect(xx, base - h, w, h);
+            g.fillStyle = rgba(stripe, 0.35);
+            for (let s = 0; s < w; s += 6) g.fillRect(xx + s, base - h, 3, h);
+            g.fillStyle = '#0f2328';
+            g.beginPath(); g.moveTo(xx - 3, base - h); g.lineTo(xx + w / 2, base - h - 10); g.lineTo(xx + w + 3, base - h); g.fill();
+            g.fillStyle = '#0a1619'; g.fillRect(xx + 9, base - 20, 8, 20);
+          });
+          x += w + 8 + rnd() * 10;
+        } else if (kind < 0.85) {
+          // surf shop / bar avec store et enseigne néon
+          const w = 70 + rnd() * 40, h = 48 + rnd() * 26;
+          const bx = x, text = signs[si++ % signs.length], color = accents[Math.floor(rnd() * 3)];
+          wrap(bx, w, (xx) => {
+            building(g, rnd, xx, base, w, h, { color: '#17333b', roof: 'flat',
+              win: { w: 10, h: 8, gx: 8, gy: 10, mx: 8, top: 8, bottom: 26, lit: 0.55, color: '#ffe9a8', alpha: 0.75, glow: true } });
+            // store rayé au-dessus de la vitrine
+            for (let s = 0; s < w; s += 8) {
+              g.fillStyle = s % 16 ? rgba(color, 0.55) : '#e9e2d0';
+              g.fillRect(xx + s, base - 26, 8, 5);
+            }
+            g.fillStyle = rgba('#ffe9a8', 0.35); g.fillRect(xx + 6, base - 19, w - 12, 13);
+            neonSign(g, xx + 8, base - h + 2 - 4, text, color);
+          });
+          x += w + 14 + rnd() * 30;
+        } else {
+          // poste de secours sur pilotis, drapeau vert
+          const bx = x;
+          wrap(bx, 30, (xx) => {
+            g.fillStyle = '#0f2328';
+            g.fillRect(xx + 3, base - 40, 3, 40); g.fillRect(xx + 22, base - 40, 3, 40);
+            g.fillRect(xx, base - 62, 28, 22);
+            g.fillStyle = rgba('#ffe9a8', 0.6); g.fillRect(xx + 5, base - 56, 18, 7);
+            g.fillStyle = '#0f2328'; g.fillRect(xx + 13, base - 86, 2, 24);
+            g.fillStyle = '#2f8f4e'; g.fillRect(xx + 15, base - 86, 12, 8);
+          });
+          x += 50 + rnd() * 20;
+        }
+      }
+    });
+    const near = makeLayer(0.75, 23, (g, rnd, wrap) => {
+      const base = GROUND_Y;
+      // ganivelles (clôtures de dunes en lattes de bois)
+      g.fillStyle = '#0b1d21';
+      for (let x = 0; x < LAYER_W; x += 200) {
+        const len = 80 + Math.floor(rnd() * 60);
+        for (let k = 0; k < len; k += 4) g.fillRect(x + k, base - 18 + ((k / 4) % 2), 2, 18);
+        g.fillRect(x, base - 14, len, 1); g.fillRect(x, base - 6, len, 1);
+      }
+      for (let x = 150; x < LAYER_W; x += 300) {
+        wrap(x, 12, (xx) => lampPost(g, xx, base, 64, '#0b1d21', '#ffe9a8'));
+        // planches de surf posées contre un rack
+        const sx = x + 50;
+        for (let k = 0; k < 3; k++) {
+          const col = ['#7fffd4', '#ff2fa0', '#ffd400'][k];
+          g.save(); g.translate(sx + k * 9, base); g.rotate(-0.12);
+          g.fillStyle = '#0b1d21'; g.beginPath(); g.ellipse(0, -24, 5, 24, 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = rgba(col, 0.5); g.fillRect(-0.5, -46, 1, 44);
+          g.restore();
+        }
+      }
+    });
+    return { far, mid, near };
+  }
+
+  // ---- BAYONNE : vieille ville de nuit, maisons à colombages sur la Nive ----
+  function buildBayonne() {
+    const far = makeLayer(0.1, 31, (g, rnd, wrap) => {
+      const base = GROUND_Y - 30;
+      for (let x = 0; x < LAYER_W;) {
+        const w = 26 + rnd() * 34, h = 70 + rnd() * 90;
+        const bx = x;
+        wrap(bx, w, (xx) => building(g, rnd, xx, base, w, h, {
+          color: '#2b1e3f', roof: rnd() < 0.7 ? 'gable' : 'flat',
+          win: { w: 3, h: 4, gx: 5, gy: 7, mx: 5, top: 8, bottom: 6, lit: 0.35, color: '#ffcf8a', alpha: 0.6 }
+        }));
+        x += w + 1;
+      }
+      // cathédrale Sainte-Marie : deux flèches et la rosace éclairée
+      const cx = 260;
+      g.fillStyle = '#2f2146';
+      g.fillRect(cx - 40, base - 130, 80, 130);
+      for (const dx of [-40, 22]) {
+        g.fillRect(cx + dx, base - 190, 18, 190);
+        g.beginPath(); g.moveTo(cx + dx - 2, base - 190); g.lineTo(cx + dx + 9, base - 260); g.lineTo(cx + dx + 20, base - 190); g.fill();
+      }
+      glow(g, cx, base - 95, 30, '#ffb3d9', 0.45);
+      g.fillStyle = rgba('#ffb3d9', 0.7);
+      g.beginPath(); g.arc(cx, base - 95, 9, 0, Math.PI * 2); g.fill();
+    });
+    const mid = makeLayer(0.3, 32, (g, rnd, wrap) => {
+      const quay = GROUND_Y - 18;
+      const bodies = ['#3a2442', '#302a48', '#3d2a38', '#2c2f45', '#402a3a'];
+      const shutters = ['#8e2a2a', '#2a5a3a', '#8e2a2a', '#2a3d6b'];
+      const signs = ['BAR', 'PINTXOS', 'TXOKO', 'HOTEL', 'JAMBON', 'CAFÉ'];
+      let si = 0;
+      for (let x = 0; x < LAYER_W;) {
+        const w = 34 + Math.floor(rnd() * 18), floors = 3 + Math.floor(rnd() * 4), h = 20 + floors * 20;
+        const body = bodies[Math.floor(rnd() * bodies.length)];
+        const sh = shutters[Math.floor(rnd() * shutters.length)];
+        const sign = rnd() < 0.35 ? signs[si++ % signs.length] : null;
+        const signColor = ['#ff2fa0', '#b400ff', '#7fffd4'][Math.floor(rnd() * 3)];
+        const bx = x;
+        wrap(bx, w, (xx) => {
+          building(g, rnd, xx, quay, w, h, {
+            color: body, roof: 'overhang', roofColor: '#1d1226', timber: '#1a1020', shutters: sh,
+            win: { w: 7, h: 10, gx: 10, gy: 10, mx: 6, top: 10, bottom: 18, lit: 0.5, color: '#ffcf8a', alpha: 0.85, glow: true, dark: 'rgba(10,6,18,0.7)' }
+          });
+          // arcades du rez-de-chaussée
+          g.fillStyle = 'rgba(10,6,18,0.8)';
+          g.beginPath(); g.arc(xx + w / 2, quay - 8, 7, Math.PI, 0); g.fillRect(xx + w / 2 - 7, quay - 8, 14, 8); g.fill();
+          if (sign) neonSign(g, xx + 4, quay - 20, sign, signColor);
+        });
+        x += w + 1;
+      }
+      // la Nive : eau sombre avec reflets des fenêtres
+      g.fillStyle = '#150e24';
+      g.fillRect(0, quay, LAYER_W, GROUND_Y - quay);
+      for (let k = 0; k < 90; k++) {
+        const rx = rnd() * LAYER_W, rw = 4 + rnd() * 10;
+        g.fillStyle = rgba(rnd() < 0.7 ? '#ffcf8a' : '#ff2fa0', 0.12 + rnd() * 0.18);
+        g.fillRect(rx, quay + 2 + rnd() * (GROUND_Y - quay - 4), rw, 1);
+      }
+    });
+    const near = makeLayer(0.75, 33, (g, rnd, wrap) => {
+      const base = GROUND_Y;
+      // lampadaires reliés par des guirlandes de fanions rouges et blancs (fêtes de Bayonne)
+      const posts = [];
+      for (let x = 40; x < LAYER_W; x += 195) posts.push(x);
+      for (let i = 0; i < posts.length; i++) {
+        const x0 = posts[i], x1 = (i + 1 < posts.length) ? posts[i + 1] : posts[0] + LAYER_W;
+        const y0 = base - 70;
+        for (const shift of [0, -LAYER_W]) {
+          const a = x0 + shift + 8, b = x1 + shift + 8;
+          g.strokeStyle = 'rgba(20,12,30,0.9)'; g.lineWidth = 1;
+          g.beginPath(); g.moveTo(a, y0); g.quadraticCurveTo((a + b) / 2, y0 + 26, b, y0); g.stroke();
+          for (let t = 0.06; t < 1; t += 0.07) {
+            const fx = a + (b - a) * t;
+            const fy = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * (y0 + 26) + t * t * y0;
+            g.fillStyle = Math.round(t / 0.07) % 2 ? '#c8102e' : '#f5f0e6';
+            g.beginPath(); g.moveTo(fx - 3, fy); g.lineTo(fx + 3, fy); g.lineTo(fx, fy + 6); g.fill();
+          }
+        }
+        wrap(x0, 12, (xx) => lampPost(g, xx, base, 70, '#140c1e', '#ffcf8a'));
+      }
+    });
+    return { far, mid, near };
+  }
+
+  const CITY_BUILDERS = { biarritz: buildBiarritz, anglet: buildAnglet, bayonne: buildBayonne };
+  function cityLayers(theme) {
+    if (!cityCache[theme.key]) cityCache[theme.key] = CITY_BUILDERS[theme.key]();
+    return cityCache[theme.key];
+  }
+
   function drawBackground() {
     const theme = level.theme;
     const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -1730,6 +2120,12 @@
     grad.addColorStop(1, theme.sky[1]);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
+    // brume lumineuse de la ville sur l'horizon
+    const haze = ctx.createLinearGradient(0, GROUND_Y - 260, 0, GROUND_Y);
+    haze.addColorStop(0, rgba(theme.accent, 0));
+    haze.addColorStop(1, rgba(theme.accent, 0.12));
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, GROUND_Y - 260, W, 260);
 
     // quelques étoiles pour Bayonne la nuit
     if (theme.key === 'bayonne') {
@@ -1750,9 +2146,19 @@
     ctx.fill();
     ctx.globalAlpha = 1;
 
+    // ville en couches : loin → (mer à Biarritz) → façades → monuments → mobilier urbain
+    const city = cityLayers(theme);
+    drawLayer(city.far);
+    // brume d'éloignement : le lointain se fond dans le ciel
+    const mist = ctx.createLinearGradient(0, GROUND_Y - 320, 0, GROUND_Y);
+    mist.addColorStop(0, rgba(theme.sky[1], 0));
+    mist.addColorStop(1, rgba(theme.sky[1], 0.35));
+    ctx.fillStyle = mist;
+    ctx.fillRect(0, GROUND_Y - 320, W, 320);
     if (theme.key === 'biarritz') drawBiarritzOceanLayer(camX);
+    if (city.mid) drawLayer(city.mid);
 
-    // silhouettes en parallaxe (chaque silhouette garde sa forme : index stable)
+    // silhouettes des monuments en parallaxe (chaque silhouette garde sa forme : index stable)
     const par = camX * 0.5;
     const first = Math.floor(par / 90) - 1;
     for (let i = first; i < first + 7; i++) {
@@ -1764,6 +2170,7 @@
       theme.draw(x, ((i % 12) + 12) % 12, theme.silhouette, theme.accent);
       ctx.restore();
     }
+    drawLayer(city.near);
   }
 
   // ================================================================
@@ -1800,10 +2207,19 @@
       ctx.fillStyle = '#0d0616';
       ctx.fillRect(x, y, T, T);
       if (r > 0 && tileAt(c, r - 1) !== '#') {
+        // trottoir : dalles, bordure lumineuse, marquage au sol en contrebas
+        ctx.fillStyle = '#1d1330';
+        ctx.fillRect(x, y + 2, T, 11);
+        ctx.fillStyle = '#0d0616';
+        ctx.fillRect(x + 14, y + 2, 1, 11);
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        ctx.fillRect(x, y + 2, T, 1);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(x, y + 13, T, 2);
         ctx.fillStyle = theme.accent;
         ctx.fillRect(x, y, T, 2);
-        ctx.fillStyle = rgba(theme.accent, 0.35);
-        ctx.fillRect(x + ((c % 2) ? 0 : 15), y + 13, 14, 2);
+        ctx.fillStyle = rgba(theme.accent, 0.3);
+        ctx.fillRect(x + ((c % 2) ? 0 : 15), y + 22, 14, 2);
       }
     } else if (ch === 'B' || ch === 'E') {
       ctx.fillStyle = '#2a1540';
