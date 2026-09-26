@@ -35,7 +35,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 18 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 19 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -61,6 +61,8 @@ Règles de jeu que la suite protège :
   (Bug historique : les figures automatiques faisaient monter le combo sans limite.)
 - Les pièces au-dessus d'un rail se ramassent en glissant, sans sauter (posées à hauteur du rail + 1).
 - Flammes au sol : au sol, jamais sous un rail/une planche ni sur un point de réapparition ; sans danger au repos, blessent allumées, piment = immunité.
+  Chacune a une piste d'élan (4 tuiles de sol dégagé avant, 3 après) et se franchit en sautant pendant qu'elle brûle :
+  jamais juste après la réception d'un trou, sous des briques basses, ni coincée entre deux obstacles.
 
 ## 4. Contrôles visuels (pas couverts par la suite)
 
@@ -93,7 +95,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/18, avec le détail des échecs) ;
+- le résultat de la suite (X/19, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

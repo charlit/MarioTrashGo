@@ -331,6 +331,46 @@
     check('flammes', count >= 9 && problems.length === 0, problems.length ? problems.join(' | ') : count + ' flammes OK (brûle ' + on + '/200 images, sans danger au repos, blesse allumée, piment protège)');
   });
 
+  // 19. Chaque flamme se franchit en sautant par-dessus PENDANT qu'elle brûle, avec une
+  //     piste d'élan au sol (bug : flammes posées juste après un trou, sous des briques
+  //     basses ou coincées entre deux poubelles → on retombait dedans sans pouvoir l'éviter)
+  safe('flammes franchissables', () => {
+    if (!g.flames) { check('flammes franchissables', false, 'g.flames absent'); return; }
+    const problems = [];
+    let tested = 0;
+    const n = g.def().levels;
+    for (let lv = 0; lv < n; lv++) {
+      g.start(lv);
+      const count = g.flames().length;
+      for (let i = 0; i < count; i++) {
+        g.start(lv);
+        g.enemies().forEach((e) => { e.alive = false; e.dead = 'gone'; });
+        const grid = g.grid();
+        const fc = g.flames()[i].c;
+        // piste : sol continu de fc-4 à fc+3, rien de solide à hauteur 1-2 (on doit pouvoir courir)
+        let runway = true;
+        for (let c = fc - 4; c <= fc + 3; c++) {
+          if (grid[GROUND_ROW][c] !== '#') runway = false;
+          for (let r = GROUND_ROW - 2; r < GROUND_ROW; r++) if ('B?MEXSTtpq'.includes(grid[r][c])) runway = false;
+        }
+        if (!runway) { problems.push('niv ' + (lv + 1) + ' col ' + fc + " : pas de piste d'élan dégagée"); continue; }
+        tested++;
+        let k = 0; while (!(g.flames()[i].mode === 'on' && g.flames()[i].k === 10) && k < 400) { g.run(1); k++; }
+        const p = g.player();
+        g.warp(fc - 4); p.x = (fc - 4) * T + 5; p.y = GROUND_Y - p.h; p.vy = 0;
+        g.press('right');
+        let jumped = false, f = 0;
+        while (p.x < fc * T + 2 * T && f < 200 && g.info().state === 'playing') {
+          if (!jumped && p.x + p.w > fc * T - 48) { g.press('jump'); jumped = true; }
+          g.run(1); f++;
+        }
+        g.release('right'); g.release('jump');
+        if (g.info().state !== 'playing' || g.info().lives !== 3) problems.push('niv ' + (lv + 1) + ' col ' + fc + ' : brûlé en sautant par-dessus');
+      }
+    }
+    check('flammes franchissables', tested > 0 && problems.length === 0, problems.length ? problems.join(' | ') : tested + " flammes franchies en sautant pendant qu'elles brûlent");
+  });
+
   g.start(0);
   const failed = results.filter((r) => !r.ok);
   return { total: results.length, echecs: failed.length, results };
