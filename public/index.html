@@ -817,7 +817,7 @@
   (function logVisit() {
     try {
       if (sessionStorage.getItem('trashgo_world_visit_logged') === '1') return;
-      fetch('/api/visits', {
+      fetch('api/visits', { // adresse relative : marche à la racine comme sous /mariotrashgo/
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -830,7 +830,10 @@
   })();
 
   // ---- Classement en ligne (TOP 10) ----
-  const SCORES_API = '/api/scores';
+  // Adresse RELATIVE à la page : le jeu marche servi à la racine (…:8081/) comme
+  // sous un sous-chemin (…/mariotrashgo/). Avec "/api/scores", sous un sous-chemin,
+  // l'appel partait à la racine du site et le classement était cassé (404).
+  const SCORES_API = 'api/scores';
 
   async function fetchLeaderboard() {
     try {
