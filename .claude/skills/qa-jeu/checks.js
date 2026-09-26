@@ -230,6 +230,22 @@
     check('croix glissante', right && left && released, 'droite=' + right + ', glisse gauche=' + left + ', relâché=' + released);
   });
 
+  // 16. Anti-exploit : sauter sur place en boucle (figures auto) ne doit pas faire
+  //     exploser le score, et le combo reste plafonné (bug : x21 et 7805 pts en 20 sauts)
+  safe('sauts sur place', () => {
+    g.start(0);
+    const s0 = g.info().score;
+    for (let i = 0; i < 20; i++) {
+      g.press('jump'); g.run(46); g.release('jump');
+      let k = 0; while (!g.info().onGround && k < 30) { g.run(1); k++; }
+      g.run(1);
+    }
+    const gained = g.info().score - s0;
+    const m = /x(\d+)/.exec(document.getElementById('combo').textContent);
+    const comboShown = m ? +m[1] : 1;
+    check('sauts sur place', gained < 1500 && comboShown <= 8, '+' + gained + ' pts en 20 sauts, combo affiché x' + comboShown);
+  });
+
   g.start(0);
   const failed = results.filter((r) => !r.ok);
   return { total: results.length, echecs: failed.length, results };

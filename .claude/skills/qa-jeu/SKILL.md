@@ -23,18 +23,19 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 |---|---|
 | `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, 3+ = monde 2…), intro sautée |
 | `run(n)` | Avance de `n` images (60 par seconde de jeu) |
-| `press(k)` / `release(k)` | Touches `left`, `right`, `jump`, `trick` |
+| `press(k)` / `release(k)` | Touches `left`, `right`, `jump` (les figures sont automatiques) |
 | `warp(col)` | Téléporte le joueur à la colonne `col`, sans changer sa hauteur |
 | `place(x, y, vy)` | Place le joueur au pixel près, avec une vitesse verticale |
 | `info()` | `{ state, levelIndex, score, coinCount, lives, timeLeft, big, x, y, onGround, grinding, camX, enemies }` |
 | `player()` / `enemies()` | Objets du jeu, modifiables directement (ex. `e.active = true`) |
 | `grid()` | Niveau en texte, une chaîne par rangée (légende des tuiles dans le code : `# B ? M E X S = R T t p q`) |
 | `def()` / `consts` | Infos du niveau (`cols`, `flag`, `checkpoint`) et constantes (`T`, `GROUND_ROW`, `GROUND_Y`…) |
+| `setPaused(b)` / `isPaused()` / `setCoins(n)` | Pause, et nombre de pièces (pour tester le 1UP) |
 | `render()` | Redessine une image. Obligatoire avant chaque capture d'écran quand le panneau est masqué |
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 15 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 16 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -56,6 +57,8 @@ Règles de jeu que la suite protège :
   et aucune marche d'escalier ne dépasse 4 tuiles. (Bug historique : la 3e poubelle du 1-1 était infranchissable.)
 - Chaque niveau a du sol au départ et au checkpoint, un socle `S` sous le drapeau, et un fronton entier avant la fin.
 - Drapeau → bonus de temps → niveau suivant, pour **chaque** niveau.
+- Sauter sur place en boucle ne rapporte presque rien, et le combo reste plafonné à x8.
+  (Bug historique : les figures automatiques faisaient monter le combo sans limite.)
 
 ## 4. Contrôles visuels (pas couverts par la suite)
 
@@ -87,7 +90,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/15, avec le détail des échecs) ;
+- le résultat de la suite (X/16, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

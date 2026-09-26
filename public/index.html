@@ -93,7 +93,8 @@
     text-shadow: 0 0 6px rgba(127,255,212,0.6);
   }
   .hudRow > * { white-space: nowrap; }
-  #controlsHint { white-space: nowrap; }
+  /* texte d'aide centré entre le nom de la ville (à gauche) et ⏸ 🔊 (à droite) */
+  #controlsHint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; left: max(17%, 62px) !important; right: max(20%, 72px) !important; }
   /* écran de jeu étroit (téléphone en paysage) : le nom de la ville reste en bas à gauche du jeu */
   @container (max-width: 300px) { #worldEl .city { display: none; } }
   #hudSub span {
@@ -530,7 +531,7 @@
   </div>
   <div id="combo">COMBO x1</div>
   <div id="milestoneBanner"></div>
-  <div id="controlsHint">← → COURIR · ESPACE SAUT (figure auto)</div>
+  <div id="controlsHint">← → COURIR · ESPACE SAUT</div>
   <button id="btnMute" type="button">🔊</button>
   <button id="btnPause" type="button" aria-label="Pause">⏸</button>
   <div id="sysTop"></div>
@@ -1166,8 +1167,11 @@
     if (x !== undefined) addFloatingText('+' + pts + (label ? ' ' + label : ''), x, y, color);
   }
 
+  // Le combo monte avec les vraies actions (écraser, glisser), plafonné à x8 :
+  // sinon sauter sur place en boucle (figures auto) faisait exploser le score.
+  const COMBO_MAX = 8;
   function bumpCombo() {
-    combo++;
+    combo = Math.min(combo + 1, COMBO_MAX);
     comboTimer = 130;
     comboEl.textContent = 'COMBO x' + combo;
     comboEl.classList.add('show');
@@ -1256,6 +1260,7 @@
     Audio2.crashSfx();
     buzz([40, 40, 80]);
     grinding = false;
+    trick = null; // pas de figure figée pendant l'animation de mort
     player.big = false;
     player.vx = 0;
     player.vy = fell ? 0 : -9;
@@ -1373,8 +1378,8 @@
     trick = { kind, elapsed: 0, duration: kind === 'salto' ? 28 : kind === 'vrille' ? 26 : 22 };
   }
   function finishTrick() {
+    // la figure profite du combo en cours, mais ne l'augmente ni ne le prolonge
     addScore(TRICK_POINTS[trick.kind] * combo, player.x, player.y - 12, '#ffd400', TRICK_LABELS[trick.kind]);
-    bumpCombo();
     Audio2.trickSfx();
     trick = null;
   }
