@@ -462,24 +462,16 @@
   html.sys-top #hudTop { left: 78px; }
   html.sys-top #hudSub { top: 42px; }
   html.sys-top #combo { top: 62px; }
-  #pad button.small {
-    --c: #ffd400;
-    width: min(18cqw, 70px);
-    height: min(18cqw, 70px);
-    border-radius: 50%;
-    font-size: min(3.3cqw, 12px);
-    letter-spacing: 0.5px;
-  }
   #pad button.jump {
     --c: #ff2fa0;
     --deep: #7a0d4b;
-    width: min(26cqw, 100px);
-    height: min(26cqw, 100px);
+    width: min(30cqw, 116px);
+    height: min(30cqw, 116px);
     border-radius: 50%;
     background: #ff2fa0;
     color: #0d0d12;
     border-color: #ffc2e3;
-    font-size: min(4.2cqw, 16px);
+    font-size: min(5cqw, 19px);
     letter-spacing: 1px;
   }
 
@@ -508,8 +500,7 @@
     #pad .grp.right { order: 2; border-left: none; border-radius: 0 26px 26px 0; flex-direction: column-reverse; background: linear-gradient(270deg, #1d1330, #0d0616); }
     #dpad { width: 132px; height: 76px; gap: 6px; }
     #dpad .half { font-size: 26px; }
-    #pad button.small { width: 62px; height: 62px; font-size: 12px; }
-    #pad button.jump { width: 88px; height: 88px; font-size: 15px; }
+    #pad button.jump { width: 104px; height: 104px; font-size: 18px; }
   }
   #pauseOverlay {
     position: absolute;
@@ -539,7 +530,7 @@
   </div>
   <div id="combo">COMBO x1</div>
   <div id="milestoneBanner"></div>
-  <div id="controlsHint">← → COURIR · ESPACE SAUT · X FIGURE</div>
+  <div id="controlsHint">← → COURIR · ESPACE SAUT (figure auto)</div>
   <button id="btnMute" type="button">🔊</button>
   <button id="btnPause" type="button" aria-label="Pause">⏸</button>
   <div id="sysTop"></div>
@@ -570,7 +561,6 @@
     <div id="dpad"><div class="half key" data-dir="left">◀</div><div class="half key" data-dir="right">▶</div></div>
   </div>
   <div class="grp right">
-    <button type="button" class="key small" data-key="trick">FIGURE</button>
     <button type="button" class="key jump" data-key="jump">SAUT</button>
   </div>
 </div>
@@ -1100,7 +1090,7 @@
   // grind / figures / combo (repris de TrashGO)
   let grinding = false, grindPts = 0, grindFrames = 0;
   let combo = 1, comboTimer = 0;
-  let canTrick = true, trick = null, trickCycleIndex = 0;
+  let trick = null, trickCycleIndex = 0;
   const TRICK_KINDS = ['salto', 'ecart', 'vrille'];
   let landTimer = 0;
   let stompChain = 0;
@@ -1232,7 +1222,7 @@
     camX = Math.max(0, Math.min(player.x - W * 0.4, level.cols * T - W));
     grinding = false; grindPts = 0;
     combo = 1; comboTimer = 0; comboEl.classList.remove('show');
-    trick = null; canTrick = true; stompChain = 0; landTimer = 0;
+    trick = null; stompChain = 0; landTimer = 0;
     flagY = rowY(GROUND_ROW - 10) + 6;
     // le marquage au sol de la manette prend la couleur de la ville, comme le sol du jeu
     try { document.documentElement.style.setProperty('--lane', rgba(level.theme.accent, 0.3)); } catch (e) {}
@@ -1368,22 +1358,25 @@
     player.coyote = 0;
     player.jumpBuffer = 0;
     player.jumpCut = false;
-    canTrick = true;
     Audio2.jumpSfx();
+    startAutoTrick();
   }
 
-  function doTrick() {
-    if (state !== 'playing') return;
-    if (player.onGround || grinding || !canTrick) return;
-    canTrick = false;
+  // Figure automatique à chaque saut (salto → grand écart → vrille, à tour de rôle).
+  // Les points tombent quand la figure est TERMINÉE en l'air : un grand saut rapporte,
+  // un petit saut coupé non. Atterrir avant la fin n'est pas pénalisé.
+  const TRICK_POINTS = { salto: 30, ecart: 35, vrille: 45 };
+  const TRICK_LABELS = { salto: 'SALTO !', ecart: 'GRAND ÉCART !', vrille: 'VRILLE !' };
+  function startAutoTrick() {
     const kind = TRICK_KINDS[trickCycleIndex % TRICK_KINDS.length];
     trickCycleIndex++;
-    const rewards = { salto: 30, ecart: 35, vrille: 45 };
-    const labels = { salto: 'SALTO !', ecart: 'GRAND ÉCART !', vrille: 'VRILLE !' };
-    addScore(rewards[kind] * combo, player.x, player.y - 12, '#ffd400', labels[kind]);
+    trick = { kind, elapsed: 0, duration: kind === 'salto' ? 28 : kind === 'vrille' ? 26 : 22 };
+  }
+  function finishTrick() {
+    addScore(TRICK_POINTS[trick.kind] * combo, player.x, player.y - 12, '#ffd400', TRICK_LABELS[trick.kind]);
     bumpCombo();
     Audio2.trickSfx();
-    trick = { kind, elapsed: 0, duration: kind === 'salto' ? 28 : kind === 'vrille' ? 26 : 22 };
+    trick = null;
   }
 
   function endGrind() {
@@ -1495,12 +1488,7 @@
     if (player.onGround && wasAir) {
       landTimer = 10;
       stompChain = 0;
-      if (trick && trick.elapsed < trick.duration * 0.6) {
-        // atterrissage en pleine figure : le combo est perdu
-        addFloatingText('BAIL', player.x, player.y - 12, '#ff5566');
-        combo = 1; comboEl.classList.remove('show');
-        player.vx *= 0.3;
-      }
+      // figure pas finie à l'atterrissage : elle s'arrête, sans points ni pénalité
       trick = null;
     }
 
@@ -1522,7 +1510,7 @@
     }
 
     // ---- figures ----
-    if (trick) { trick.elapsed++; if (trick.elapsed >= trick.duration) trick = null; }
+    if (trick) { trick.elapsed++; if (trick.elapsed >= trick.duration) finishTrick(); }
     if (landTimer > 0) landTimer--;
     if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) { combo = 1; comboEl.classList.remove('show'); } }
     if (player.onGround) runPhase += Math.abs(player.vx) * 0.14;
@@ -1596,7 +1584,7 @@
           buzz(15);
           player.vy = keys.jump ? -11 : -7;
           player.jumpCut = false;
-          canTrick = true;
+          startAutoTrick();
           if (grinding) endGrind();
         } else {
           hurtPlayer();
@@ -3093,13 +3081,12 @@
   const KEYMAP = {
     ArrowLeft: 'left', KeyA: 'left', KeyQ: 'left',
     ArrowRight: 'right', KeyD: 'right',
-    Space: 'jump', ArrowUp: 'jump', KeyW: 'jump', KeyZ: 'jump',
-    KeyX: 'trick', KeyK: 'trick', ShiftLeft: 'trick', ArrowDown: 'trick'
+    Space: 'jump', ArrowUp: 'jump', KeyZ: 'jump',
+    KeyW: 'jump'
   };
 
   function press(k) {
     if (k === 'jump') { if (!keys.jump) pressJump(); }
-    if (k === 'trick' && !keys.trick) doTrick();
     keys[k] = true;
   }
   function release(k) { keys[k] = false; }

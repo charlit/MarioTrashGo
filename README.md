@@ -10,9 +10,9 @@ horizontal façon Super Mario.
 - **3 niveaux** : 1-1 Biarritz, 1-2 Anglet (skatepark de plage), 1-3 Bayonne (de nuit).
   Ensuite ça reboucle en 2-1, 2-2… avec des ennemis plus rapides.
 - **Contrôles clavier** : ← → (ou Q/D) pour courir, Espace / ↑ / Z pour sauter
-  (maintenir = saut plus haut), X ou ↓ pour une figure en l'air.
+  (maintenir = saut plus haut). Les figures sont automatiques à chaque saut.
 - **Mobile** : manette tactile sous l'écran — croix ◀ ▶ d'un seul bloc (on glisse le
-  pouce d'un côté à l'autre), FIGURE, SAUT. En paysage, les commandes passent de
+  pouce d'un côté à l'autre) et SAUT ; ⏸ et 🔊 en haut à gauche. En paysage, les commandes passent de
   chaque côté du jeu. Bouton ⏸ (ou P / Échap), pause automatique quand on quitte
   l'appli, vibration quand on écrase un ennemi ou qu'on est touché (Android).
   Ajouté à l'écran d'accueil, le jeu s'ouvre en plein écran.
@@ -20,8 +20,8 @@ horizontal façon Super Mario.
 - Blocs `?` = pièces, briques cassables quand on est grand.
 - **Gâteau basque** = champignon (on grandit), **piment d'Espelette** = étoile (invincible).
 - Les tuyaux sont des **poubelles** vertes, l'arrivée est un **fronton** basque.
-- Rails : glissade automatique à l'atterrissage. Figures en l'air (salto,
-  grand écart, vrille) = points × combo (atterrir en pleine figure = BAIL, combo perdu).
+- Rails : glissade automatique à l'atterrissage. Chaque saut lance une figure
+  (salto, grand écart, vrille à tour de rôle) : si elle se termine en l'air, points × combo.
 - 3 vies, checkpoint à mi-niveau, 100 pièces = 1UP, chrono de 300.
 
 ## Lancer en local

@@ -64,7 +64,7 @@ Pour agrandir le personnage, copie des zones du canvas dans un canvas temporaire
 Vérifie :
 - **Course** : les jambes alternent quand on tient `right` (capture 8 images espacées de 3 frames). À l'arrêt, les jambes sont droites.
 - **Pas de planche de skate** visible, ni au sol ni en l'air ni au crash.
-- **Figures** : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient).
+- **Figures** (automatiques à chaque saut, à tour de rôle) : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient). Il n'y a plus de touche FIGURE.
 - **Décors** : Biarritz (vagues, rocher, phare), Anglet (dunes, planches de surf), Bayonne (nuit, étoiles, lauburu).
   Vérifie aussi les poubelles vertes, les blocs `?` jaunes, le drapeau au lauburu et le fronton « ONGI ETORRI ».
 - **Mobile** : `resize_window` en preset `mobile`, puis recharge la page. La manette doit s'afficher sous le canvas,
@@ -73,7 +73,7 @@ Vérifie :
   doit passer à `keys.left`. Vérifie aussi que ⏸ fige le jeu et le chrono (`__tg.isPaused()`).
   - **Paysage** : une taille personnalisée n'émule pas le tactile. Recopie les règles `@media (orientation: landscape)`
     dans un `<style>` temporaire, avec `#pad { display: contents !important }`, à 812×375. Tu dois voir la croix à gauche,
-    le jeu au centre, SAUT et FIGURE à droite, et le texte du haut sur une seule ligne.
+    le jeu au centre, SAUT à droite, et le texte du haut sur une seule ligne.
   - Remets ensuite le preset `desktop`.
 - **HUD** : le score, les pièces ⚡, le monde, le chrono ⏱ (rouge sous 100) et les vies ♥ se mettent à jour.
 

@@ -160,14 +160,22 @@
     check('drapeau', out.every((o, i) => o.cleared && o.bonus > 0 && o.suivant === i + 1), JSON.stringify(out));
   });
 
-  // 11. Figures en l'air : points + combo
-  safe('figures', () => {
+  // 11. Figures automatiques : un grand saut finit sa figure (points), un petit saut
+  //     coupé ne rapporte rien mais ne pénalise pas (combo et vitesse intacts)
+  safe('figures auto', () => {
     g.start(0);
     const s0 = g.info().score;
-    g.press('jump'); g.run(5);
-    g.press('trick'); g.release('trick');
-    g.run(60); g.release('jump'); g.run(20);
-    check('figures', g.info().score > s0, '+' + (g.info().score - s0) + ' pts');
+    g.press('jump'); g.run(60); g.release('jump'); g.run(20);
+    const full = g.info().score - s0;
+    g.start(0);
+    g.press('right'); g.run(40);
+    const s1 = g.info().score, vx = g.player().vx;
+    g.press('jump'); g.run(2); g.release('jump');
+    let t = 0; while (!g.info().onGround && t < 60) { g.run(1); t++; }
+    const hop = g.info().score - s1;
+    const keptSpeed = Math.abs(g.player().vx) > Math.abs(vx) * 0.6;
+    g.release('right');
+    check('figures auto', full > 0 && hop === 0 && keptSpeed, 'grand saut +' + full + ' pts, petit saut +' + hop + ' pts, vitesse gardée=' + keptSpeed);
   });
 
   // 12. Chrono : à 0, on perd une vie
