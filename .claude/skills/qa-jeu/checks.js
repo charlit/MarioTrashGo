@@ -246,6 +246,91 @@
     check('sauts sur place', gained < 1500 && comboShown <= 8, '+' + gained + ' pts en 20 sauts, combo affiché x' + comboShown);
   });
 
+  // 17. Pièces au-dessus des rails : on les ramasse toutes en glissant, SANS sauter
+  //     (bug : posées 2 tuiles au-dessus du rail, le petit personnage les ratait d'1 px)
+  safe('pièces sur rails', () => {
+    const problems = [];
+    let railsTested = 0;
+    const n = g.def().levels;
+    for (let i = 0; i < n; i++) {
+      g.start(i);
+      const grid = g.grid();
+      const runs = [];
+      for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+          if (grid[r][c] === 'R' && (c === 0 || grid[r][c - 1] !== 'R')) {
+            let len = 0; while (grid[r][c + len] === 'R') len++;
+            runs.push({ c, r, len });
+          }
+        }
+      }
+      for (const run of runs) {
+        g.start(i);
+        const railTop = LEVEL_Y + run.r * T;
+        const above = g.coins().filter((k) => k.x > run.c * T && k.x < (run.c + run.len) * T && k.y < railTop && k.y > railTop - 3 * T);
+        if (!above.length) continue;
+        railsTested++;
+        g.enemies().forEach((e) => { e.alive = false; e.dead = 'gone'; });
+        g.warp(run.c); g.run(1);
+        const p = g.player();
+        g.place(run.c * T + 2, railTop - p.h - 2, 1);
+        const c0 = g.info().coinCount;
+        g.press('right');
+        let f = 0, jumped = false;
+        while (p.x < (run.c + run.len) * T + 4 && f < 300) { g.run(1); f++; if (p.vy < -1) jumped = true; }
+        g.release('right');
+        const got = g.info().coinCount - c0;
+        if (got < above.length || jumped) problems.push('niveau ' + (i + 1) + ' rail col ' + run.c + ' : ' + got + '/' + above.length + ' pièces' + (jumped ? ' (a sauté ?)' : ''));
+      }
+    }
+    check('pièces sur rails', railsTested > 0 && problems.length === 0, problems.length ? problems.join(' | ') : railsTested + ' rails : toutes les pièces ramassées en glissant');
+  });
+
+  // 18. Flammes au sol : bien placées, cycliques, inoffensives au repos, blessent quand
+  //     elles brûlent, et le piment protège
+  safe('flammes', () => {
+    if (!g.flames) { check('flammes', false, 'g.flames absent du mode debug'); return; }
+    const problems = [];
+    const n = g.def().levels;
+    let count = 0;
+    for (let i = 0; i < n; i++) {
+      g.start(i);
+      const grid = g.grid(), d = g.def();
+      for (const f of g.flames()) {
+        count++;
+        if (grid[GROUND_ROW][f.c] !== '#') problems.push('niv ' + (i + 1) + ' col ' + f.c + ' : pas de sol');
+        if (Math.abs(f.c - d.checkpoint) <= 1 || f.c < 5) problems.push('niv ' + (i + 1) + ' col ' + f.c + ' : sur un point de réapparition');
+        for (let r = GROUND_ROW - 2; r < GROUND_ROW; r++) if ('R=SBTtpq'.includes(grid[r][f.c])) problems.push('niv ' + (i + 1) + ' col ' + f.c + ' : obstacle au-dessus (' + grid[r][f.c] + ')');
+      }
+    }
+    // cycle : ne brûle qu'une partie du temps
+    g.start(0);
+    const f0 = g.flames()[0];
+    let on = 0;
+    for (let k = 0; k < 200; k++) { g.run(1); if (g.flames()[0].mode === 'on') on++; }
+    if (on < 40 || on > 100) problems.push('brûle ' + on + '/200 images');
+    // au repos : on peut rester dessus sans dommage
+    g.start(0); g.enemies().forEach((e) => { e.alive = false; e.dead = 'gone'; });
+    let k = 0; while (g.flames()[0].mode !== 'off' && k < 300) { g.run(1); k++; }
+    g.warp(f0.c); g.run(1);
+    const p = g.player();
+    p.x = f0.c * T + 5; p.y = GROUND_Y - p.h; p.vy = 0;
+    let offFrames = 0; while (g.flames()[0].mode === 'off' && offFrames < 150) { g.run(1); offFrames++; }
+    const safeWhenOff = g.info().state === 'playing' && g.info().lives === 3;
+    // quand elle brûle : blesse
+    g.run(60);
+    const hurt = g.info().state === 'dying';
+    if (!safeWhenOff) problems.push("blesse alors qu'elle est éteinte");
+    if (!hurt) problems.push('ne blesse pas quand elle brûle');
+    // piment : immunisé
+    g.start(0); g.enemies().forEach((e) => { e.alive = false; e.dead = 'gone'; });
+    p.star = 600; // AVANT de le poser sur la flamme (elle peut déjà être allumée)
+    g.warp(f0.c); p.x = f0.c * T + 5; p.y = GROUND_Y - p.h;
+    g.run(220);
+    if (g.info().state !== 'playing') problems.push('le piment ne protège pas');
+    check('flammes', count >= 9 && problems.length === 0, problems.length ? problems.join(' | ') : count + ' flammes OK (brûle ' + on + '/200 images, sans danger au repos, blesse allumée, piment protège)');
+  });
+
   g.start(0);
   const failed = results.filter((r) => !r.ok);
   return { total: results.length, echecs: failed.length, results };

@@ -27,7 +27,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 | `warp(col)` | Téléporte le joueur à la colonne `col`, sans changer sa hauteur |
 | `place(x, y, vy)` | Place le joueur au pixel près, avec une vitesse verticale |
 | `info()` | `{ state, levelIndex, score, coinCount, lives, timeLeft, big, x, y, onGround, grinding, camX, enemies }` |
-| `player()` / `enemies()` | Objets du jeu, modifiables directement (ex. `e.active = true`) |
+| `player()` / `enemies()` / `coins()` / `flames()` | Objets du jeu, modifiables directement (ex. `e.active = true`) |
 | `grid()` | Niveau en texte, une chaîne par rangée (légende des tuiles dans le code : `# B ? M E X S = R T t p q`) |
 | `def()` / `consts` | Infos du niveau (`cols`, `flag`, `checkpoint`) et constantes (`T`, `GROUND_ROW`, `GROUND_Y`…) |
 | `setPaused(b)` / `isPaused()` / `setCoins(n)` | Pause, et nombre de pièces (pour tester le 1UP) |
@@ -35,7 +35,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 16 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 18 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -59,6 +59,8 @@ Règles de jeu que la suite protège :
 - Drapeau → bonus de temps → niveau suivant, pour **chaque** niveau.
 - Sauter sur place en boucle ne rapporte presque rien, et le combo reste plafonné à x8.
   (Bug historique : les figures automatiques faisaient monter le combo sans limite.)
+- Les pièces au-dessus d'un rail se ramassent en glissant, sans sauter (posées à hauteur du rail + 1).
+- Flammes au sol : au sol, jamais sous un rail/une planche ni sur un point de réapparition ; sans danger au repos, blessent allumées, piment = immunité.
 
 ## 4. Contrôles visuels (pas couverts par la suite)
 
@@ -66,6 +68,7 @@ Pour obtenir des captures nettes même quand le panneau est masqué : `start`, `
 Pour agrandir le personnage, copie des zones du canvas dans un canvas temporaire affiché en `position:fixed`, puis supprime-le.
 Vérifie :
 - **Course** : les jambes alternent quand on tient `right` (capture 8 images espacées de 3 frames). À l'arrêt, les jambes sont droites.
+- **Flammes** : grille sur le trottoir, braises + lueur en alerte, grande flamme néon quand elles brûlent.
 - **Pas de planche de skate** visible, ni au sol ni en l'air ni au crash.
 - **Figures** (automatiques à chaque saut, à tour de rôle) : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient). Il n'y a plus de touche FIGURE.
 - **Décors** : Biarritz (vagues, rocher, phare), Anglet (dunes, planches de surf), Bayonne (nuit, étoiles, lauburu).
@@ -76,7 +79,7 @@ Vérifie :
   doit passer à `keys.left`. Vérifie aussi que ⏸ fige le jeu et le chrono (`__tg.isPaused()`).
   - **Paysage** : une taille personnalisée n'émule pas le tactile. Recopie les règles `@media (orientation: landscape)`
     dans un `<style>` temporaire, avec `#pad { display: contents !important }`, à 812×375. Tu dois voir la croix à gauche,
-    le jeu au centre, SAUT à droite, et le texte du haut sur une seule ligne.
+    le jeu au centre, SAUT à droite (touches redessinées : chevrons SVG, gros bouton SAUT), et le texte du haut sur une seule ligne.
   - Remets ensuite le preset `desktop`.
 - **HUD** : le score, les pièces ⚡, le monde, le chrono ⏱ (rouge sous 100) et les vies ♥ se mettent à jour.
 
@@ -90,7 +93,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/16, avec le détail des échecs) ;
+- le résultat de la suite (X/18, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

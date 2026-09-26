@@ -396,7 +396,21 @@
     box-shadow: none;
     z-index: 20;
   }
-  #pad .grp { display: flex; gap: 3cqw; align-items: center; }
+  /* ---- Deux grandes zones tactiles : à gauche COURIR (◀ ▶), à droite SAUT ----
+     Chaque zone couvre toute sa partie de la manette (cible large pour le pouce),
+     le dessin des touches est centré dedans. */
+  #pad .grp { display: flex; align-items: stretch; justify-content: center; height: 100%; position: relative; }
+  #pad .grp.left { flex: 0 0 58%; }
+  #pad .grp.right { flex: 0 0 36%; }
+  .padLabel {
+    position: absolute;
+    left: 0; right: 0; bottom: 5px;
+    text-align: center;
+    font: bold min(2.6cqw, 10px) 'Courier New', monospace;
+    letter-spacing: 4px;
+    color: rgba(127,255,212,0.5);
+    pointer-events: none;
+  }
 
   /* touche en relief : ombre dure dessous, elle s'enfonce quand on appuie */
   .key {
@@ -423,22 +437,64 @@
     box-shadow: 0 1px 0 var(--deep), 0 0 18px color-mix(in srgb, var(--c) 60%, transparent);
     filter: brightness(1.3);
   }
+  /* icônes dessinées (les caractères ◀ ▶ deviennent des émojis bleus sur iPhone) */
+  #pad svg { fill: none; stroke: currentColor; stroke-linecap: square; stroke-linejoin: miter; }
 
   /* croix ◀ ▶ d'un seul bloc : on glisse le pouce d'un côté à l'autre sans le lever */
   #dpad {
+    flex: 1;
     display: flex;
-    gap: 2.5cqw;
-    width: 48cqw;
-    height: min(23cqw, 90px);
+    gap: 3cqw;
+    align-items: center;
+    padding-bottom: 16px;
     touch-action: none;
   }
   #dpad .half {
     flex: 1;
-    font-size: min(8cqw, 30px);
+    height: min(24cqw, 92px);
+    pointer-events: none;
+    background: linear-gradient(#2a1c40, #150d24);
+  }
+  #dpad .half svg { width: 44%; height: 44%; stroke-width: 3.4; filter: drop-shadow(0 0 3px currentColor); }
+  #dpad .half[data-dir="left"] { border-radius: 30px 10px 10px 30px; }
+  #dpad .half[data-dir="right"] { border-radius: 10px 30px 30px 10px; }
+
+  /* SAUT : toute la zone de droite réagit, le gros bouton rond est le repère visuel */
+  #pad button.jump {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 0 0 16px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #pad button.jump .cap {
+    width: min(27cqw, 104px);
+    height: min(27cqw, 104px);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ff85cb, #ff2fa0 55%, #c21476);
+    color: #1a0612;
+    border: 2px solid #ffc2e3;
+    box-shadow: 0 6px 0 #7a0d4b, 0 0 18px rgba(255,47,160,0.55);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: transform 0.05s, box-shadow 0.05s;
     pointer-events: none;
   }
-  #dpad .half[data-dir="left"] { border-radius: 16px 6px 6px 16px; }
-  #dpad .half[data-dir="right"] { border-radius: 6px 16px 16px 6px; }
+  #pad button.jump .cap svg { width: 40%; height: 26%; stroke-width: 4.5; }
+  #pad button.jump .cap span { font: bold min(3.4cqw, 13px) 'Courier New', monospace; letter-spacing: 2px; }
+  #pad button.jump.on .cap {
+    transform: translateY(5px);
+    box-shadow: 0 1px 0 #7a0d4b, 0 0 28px rgba(255,47,160,0.85);
+    filter: brightness(1.15);
+  }
 
   /* ⏸ et 🔊 en haut à gauche de l'écran (écrans tactiles) ; au-dessus de l'écran PAUSE */
   #sysTop {
@@ -463,18 +519,6 @@
   html.sys-top #hudTop { left: 78px; }
   html.sys-top #hudSub { top: 42px; }
   html.sys-top #combo { top: 62px; }
-  #pad button.jump {
-    --c: #ff2fa0;
-    --deep: #7a0d4b;
-    width: min(30cqw, 116px);
-    height: min(30cqw, 116px);
-    border-radius: 50%;
-    background: #ff2fa0;
-    color: #0d0d12;
-    border-color: #ffc2e3;
-    font-size: min(5cqw, 19px);
-    letter-spacing: 1px;
-  }
 
   /* téléphone à l'horizontale : deux poignées accrochées de part et d'autre de l'écran */
   @media (orientation: landscape) and (pointer: coarse) {
@@ -486,22 +530,25 @@
     canvas { border-radius: 0; border-bottom: 4px solid #ff2fa0; }
     #pad { display: contents; }
     #pad .grp {
+      flex: none;
       height: calc(var(--stage-w) * 620 / 390);
       width: 150px;
       box-sizing: border-box;
-      flex-direction: column;
-      justify-content: center;
-      gap: 18px;
+      padding: 0 12px;
       background: linear-gradient(90deg, #1d1330, #0d0616);
       border: 4px solid #ff2fa0;
       box-shadow: 0 0 30px rgba(255, 47, 160, 0.4);
     }
+    /* largeur fixe des poignées (écrase les 58 % / 36 % du mode portrait) */
+    #pad .grp.left, #pad .grp.right { flex: 0 0 150px; }
     #pad .grp.left { order: 0; border-right: none; border-radius: 26px 0 0 26px; }
     #stage { order: 1; }
-    #pad .grp.right { order: 2; border-left: none; border-radius: 0 26px 26px 0; flex-direction: column-reverse; background: linear-gradient(270deg, #1d1330, #0d0616); }
-    #dpad { width: 132px; height: 76px; gap: 6px; }
-    #dpad .half { font-size: 26px; }
-    #pad button.jump { width: 104px; height: 104px; font-size: 18px; }
+    #pad .grp.right { order: 2; border-left: none; border-radius: 0 26px 26px 0; background: linear-gradient(270deg, #1d1330, #0d0616); }
+    #dpad { gap: 6px; }
+    #dpad .half { height: 84px; }
+    .padLabel { font-size: 10px; bottom: 14px; }
+    #pad button.jump .cap { width: 104px; height: 104px; }
+    #pad button.jump .cap span { font-size: 13px; }
   }
   #pauseOverlay {
     position: absolute;
@@ -559,10 +606,16 @@
   </div>
 <div id="pad">
   <div class="grp left">
-    <div id="dpad"><div class="half key" data-dir="left">◀</div><div class="half key" data-dir="right">▶</div></div>
+    <div id="dpad">
+      <div class="half key" data-dir="left"><svg viewBox="0 0 24 24"><path d="M15 4 L7 12 L15 20"/></svg></div>
+      <div class="half key" data-dir="right"><svg viewBox="0 0 24 24"><path d="M9 4 L17 12 L9 20"/></svg></div>
+    </div>
+    <div class="padLabel">◂ COURIR ▸</div>
   </div>
   <div class="grp right">
-    <button type="button" class="key jump" data-key="jump">SAUT</button>
+    <button type="button" class="jump" data-key="jump" aria-label="Sauter">
+      <span class="cap"><svg viewBox="0 0 24 16"><path d="M4 13 L12 5 L20 13"/></svg><span>SAUT</span></span>
+    </button>
   </div>
 </div>
 
@@ -747,6 +800,7 @@
     function hurtSfx()  { seq([660, 440, 330, 220], 0.06, 'square', 0.25); }
     function trickSfx() { seq([500, 750, 1000], 0.045, 'square', 0.23); }
     function flagSfx()  { seq([392, 523, 659, 784, 1047, 784, 1047, 1319], 0.09, 'square', 0.22); }
+    function flameSfx() { noiseHit(0.35, 700, 0.22); sweep('sawtooth', 90, 60, 0.3, 0.08); }
     function tickSfx()  { tone(1568, 0.03, 'square', sfxGain, ctx ? ctx.currentTime : 0, 0.08); }
 
     function crashSfx() {
@@ -789,7 +843,7 @@
     function isMuted() { return muted; }
 
     return { resume, startMusic, stopMusic, jumpSfx, coinSfx, stompSfx, bumpSfx, breakSfx, powerSfx, sproutSfx,
-             oneUpSfx, hurtSfx, trickSfx, flagSfx, tickSfx, crashSfx, startGrindSfx, stopGrindSfx, setMuted, isMuted };
+             oneUpSfx, hurtSfx, trickSfx, flagSfx, tickSfx, flameSfx, crashSfx, startGrindSfx, stopGrindSfx, setMuted, isMuted };
   })();
 
   const canvas = document.getElementById('game');
@@ -964,39 +1018,41 @@
         L.enemy(23, 'cone');
         L.pipe(28, 2); L.pipe(38, 3); L.enemy(42, 'cone');
         L.pipe(47, 4); L.enemy(51, 'cone'); L.enemy(53, 'cone'); L.pipe(57, 4);
-        L.rail(61, 1, 5); L.coins(61, 3, 5);
+        L.rail(61, 1, 5); L.coins(61, 2, 5);
         L.row(76, 4, 'B?B'); L.row(79, 8, 'BBBBBBBB'); L.enemy(81, 'cone', 9); L.enemy(84, 'cone', 9);
         L.row(90, 8, 'BBB?'); L.row(93, 4, 'E');
         L.enemy(97, 'gull', 6);
         L.row(100, 4, 'BB'); L.row(105, 4, '?'); L.row(108, 4, '?M?'); L.enemy(104, 'cone'); L.enemy(106, 'cone');
         L.stairs(116, 4, 'up'); L.stairs(122, 4, 'down');
-        L.rail(128, 2, 9); L.coins(129, 4, 7);
+        L.rail(128, 2, 9); L.coins(129, 3, 7);
         L.enemy(140, 'cone'); L.enemy(142, 'cone'); L.pipe(146, 2);
         L.stairs(152, 8, 'up'); L.col(160, 8);
         L.row(166, 1, 'S');
+        L.flame(33, 0); L.flame(87, 70); L.flame(138, 140);
       }
     },
     { // 1-2 ANGLET : le skatepark des plages, plein de rails et de planches
       cols: 186, checkpoint: 96, flag: 172,
       build(L) {
         L.ground(0, 40); L.ground(44, 90); L.ground(93, 130); L.ground(134, 186);
-        L.rail(8, 1, 6); L.coins(9, 3, 4);
+        L.rail(8, 1, 6); L.coins(9, 2, 4);
         L.row(16, 4, '?M?'); L.enemy(19, 'cone');
         L.row(24, 3, '===='); L.row(29, 6, '===='); L.coins(29, 8, 4);
         L.enemy(33, 'gull', 5); L.enemy(36, 'cone');
         L.row(39, 4, '======'); L.coins(40, 6, 4);
-        L.pipe(50, 3); L.rail(54, 1, 8); L.coins(55, 3, 6); L.enemy(59, 'cone'); L.enemy(61, 'cone');
+        L.pipe(50, 3); L.rail(54, 1, 8); L.coins(55, 2, 6); L.enemy(59, 'cone'); L.enemy(61, 'cone');
         L.row(66, 4, 'B?B?B'); L.row(70, 8, 'E');
         L.enemy(75, 'gull', 7); L.enemy(80, 'cone'); L.pipe(84, 2);
-        L.rail(88, 2, 7); L.coins(89, 4, 5);
+        L.rail(88, 2, 7); L.coins(89, 3, 5);
         L.stairs(100, 3, 'up'); L.rail(103, 3, 6); L.stairs(109, 3, 'down');
         L.enemy(114, 'cone'); L.enemy(116, 'cone'); L.row(118, 4, '?B?'); L.enemy(122, 'gull', 5);
         L.pipe(126, 4);
         L.row(129, 5, '======'); L.coins(130, 7, 4);
-        L.rail(140, 1, 10); L.coins(141, 3, 8);
+        L.rail(140, 1, 10); L.coins(141, 2, 8);
         L.enemy(152, 'cone'); L.enemy(154, 'gull', 6);
         L.stairs(158, 6, 'up'); L.col(164, 6);
         L.row(172, 1, 'S');
+        L.flame(47, 0); L.flame(98, 60); L.flame(137, 120);
       }
     },
     { // 1-3 BAYONNE : de nuit, plus de trous et de mouettes
@@ -1007,17 +1063,18 @@
         L.row(21, 2, '==');
         L.pipe(28, 3); L.enemy(32, 'cone'); L.enemy(34, 'cone'); L.row(36, 4, '?M?');
         L.row(46, 3, '==='); L.enemy(44, 'gull', 7);
-        L.enemy(53, 'gull', 6); L.rail(55, 1, 7); L.coins(56, 3, 5); L.enemy(62, 'cone');
+        L.enemy(53, 'gull', 6); L.rail(55, 1, 7); L.coins(56, 2, 5); L.enemy(62, 'cone');
         L.pipe(66, 4); L.enemy(70, 'gull', 7); L.row(72, 4, 'BBEBB'); L.enemy(76, 'cone');
         L.row(86, 4, '????'); L.row(86, 8, 'BBBB'); L.enemy(88, 'cone'); L.enemy(90, 'cone');
         L.stairs(96, 4, 'up'); L.rail(100, 4, 6); L.stairs(106, 4, 'down');
         L.enemy(112, 'gull', 6);
-        L.rail(114, 2, 6); L.coins(115, 4, 4);
+        L.rail(114, 2, 6); L.coins(115, 3, 4);
         L.row(124, 4, 'B?B?B?B'); L.enemy(125, 'cone'); L.enemy(127, 'cone'); L.enemy(129, 'cone');
         L.enemy(133, 'gull', 5); L.pipe(138, 3); L.row(141, 6, 'M'); L.pipe(144, 4);
         L.enemy(148, 'gull', 7);
         L.stairs(158, 8, 'up'); L.col(166, 8);
         L.row(176, 1, 'S');
+        L.flame(26, 0); L.flame(78, 50); L.flame(121, 100); L.flame(155, 150);
       }
     }
   ];
@@ -1029,6 +1086,7 @@
     for (let r = 0; r < ROWS; r++) grid.push(new Array(def.cols).fill(' '));
     const enemies = [];
     const coinList = [];
+    const flameList = [];
     const set = (c, r, ch) => { if (c >= 0 && c < def.cols && r >= 0 && r < ROWS) grid[r][c] = ch; };
     const L = {
       ground(a, b) { for (let c = a; c < b; c++) { set(c, GROUND_ROW, '#'); set(c, GROUND_ROW + 1, '#'); } },
@@ -1036,6 +1094,7 @@
         for (let i = 0; i < str.length; i++) if (str[i] !== ' ') set(x + i, GROUND_ROW - h, str[i]);
       },
       rail(x, h, len) { for (let i = 0; i < len; i++) set(x + i, GROUND_ROW - h, 'R'); },
+      // au-dessus d'un rail de hauteur h, poser les pièces à h + 1 : on les ramasse en glissant
       coins(x, h, n) {
         for (let i = 0; i < n; i++) coinList.push({ x: (x + i) * T + T / 2, y: LEVEL_Y + (GROUND_ROW - h) * T + T / 2, r: 8, spin: i * 0.7 });
       },
@@ -1050,6 +1109,8 @@
         }
       },
       col(x, n) { for (let k = 1; k <= n; k++) set(x, GROUND_ROW - k, 'S'); },
+      // bouche d'égout qui crache des flammes par moments (phase = décalage dans le cycle)
+      flame(x, phase) { flameList.push({ c: x, phase: phase || 0 }); },
       enemy(x, type, h) {
         const baseY = LEVEL_Y + (GROUND_ROW - (h || 0)) * T;
         if (type === 'cone') {
@@ -1060,7 +1121,7 @@
       }
     };
     def.build(L);
-    return { def, grid, enemies, coins: coinList, cols: def.cols, theme: themes[index % LEVELS.length], loop };
+    return { def, grid, enemies, coins: coinList, flames: flameList, cols: def.cols, theme: themes[index % LEVELS.length], loop };
   }
 
   // ================================================================
@@ -1081,6 +1142,7 @@
   let frame = 0;
 
   let enemies = [], coins = [], powerups = [], particles = [], floatingTexts = [], popCoins = [], debris = [];
+  let flames = [];
   let bumps = {}; // "c,r" -> frames d'animation de bloc cogné
   let runPhase = 0; // cycle de course des jambes
 
@@ -1215,6 +1277,7 @@
   function loadLevelEntities() {
     enemies = level.enemies;
     coins = level.coins;
+    flames = level.flames;
     powerups = []; particles = []; floatingTexts = []; popCoins = []; debris = [];
     bumps = {};
     clearPhase = null; playerHidden = false;
@@ -1544,12 +1607,42 @@
     updateCamera();
   }
 
+  // ---- flammes au sol : repos → alerte (braises) → flammes, en boucle ----
+  const FLAME_PERIOD = 200, FLAME_WARN = 40, FLAME_ON = 70, FLAME_MAX_H = 54;
+  function flameState(f) {
+    const t = (frame + f.phase) % FLAME_PERIOD;
+    const onStart = FLAME_PERIOD - FLAME_ON, warnStart = onStart - FLAME_WARN;
+    if (t >= onStart) {
+      const k = t - onStart;
+      const grow = Math.max(0, Math.min(1, k / 8, (FLAME_ON - k) / 8));
+      return { mode: 'on', h: FLAME_MAX_H * grow, k };
+    }
+    if (t >= warnStart) return { mode: 'warn', h: 0, k: (t - warnStart) / FLAME_WARN };
+    return { mode: 'off', h: 0 };
+  }
+  function flameRect(f, st) {
+    return { x: f.c * T + 7, y: GROUND_Y - st.h, w: T - 14, h: st.h };
+  }
+  function updateFlames() {
+    for (const f of flames) {
+      const st = flameState(f);
+      const onScreen = f.c * T > camX - T && f.c * T < camX + W;
+      if (st.mode === 'on' && st.k === 0 && onScreen) Audio2.flameSfx();
+      if (st.mode === 'warn' && onScreen && frame % 4 === 0) {
+        particles.push({ x: f.c * T + 8 + Math.random() * 14, y: GROUND_Y - 2, vx: (Math.random() - 0.5) * 0.4, vy: -0.6 - Math.random() * 0.8, life: 12, color: '#ff9f1a' });
+      }
+      if (st.h > 10 && overlap(player, flameRect(f, st))) hurtPlayer();
+    }
+  }
+
   function updateCamera() {
     const target = player.x - W * 0.4;
     camX = Math.max(camX, Math.min(target, level.cols * T - W));
   }
 
   function updateEntities() {
+    updateFlames();
+    if (state !== 'playing') return;
     // ---- ennemis ----
     for (const e of enemies) {
       if (!e.active) {
@@ -2616,6 +2709,56 @@
     ctx.fill();
   }
 
+  function drawFlames() {
+    for (const f of flames) {
+      const x = f.c * T;
+      if (x < camX - T || x > camX + W + T) continue;
+      const st = flameState(f);
+      // bouche d'égout (grille) sur le trottoir
+      const y = GROUND_Y;
+      ctx.fillStyle = '#07030d';
+      ctx.fillRect(x + 4, y - 1, T - 8, 5);
+      ctx.fillStyle = st.mode === 'off' ? '#3a2a4a' : '#ff9f1a';
+      for (let k = 0; k < 4; k++) ctx.fillRect(x + 7 + k * 5, y, 2, 3);
+      if (st.mode === 'warn') {
+        // lueur qui monte + petite flamme qui vacille : on voit venir le danger
+        const a = 0.25 + 0.45 * st.k;
+        const grd = ctx.createRadialGradient(x + T / 2, y, 0, x + T / 2, y, 22);
+        grd.addColorStop(0, 'rgba(255,159,26,' + a + ')');
+        grd.addColorStop(1, 'rgba(255,159,26,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(x - 8, y - 22, T + 16, 24);
+        if (frame % 6 < 3) drawFlameShape(x + T / 2, y, 6 + 6 * st.k, 0.5);
+      } else if (st.mode === 'on' && st.h > 1) {
+        drawFlameShape(x + T / 2, y, st.h, 1);
+      }
+    }
+  }
+
+  // flamme néon : couches rouge-rose → orange → jaune, qui ondulent
+  function drawFlameShape(cx, baseY, h, scaleW) {
+    const wob = Math.sin(frame * 0.6 + cx) * 3;
+    const layers = [
+      { w: 12 * scaleW, h: h, c: '#ff5566' },
+      { w: 8 * scaleW, h: h * 0.74, c: '#ff9f1a' },
+      { w: 4.5 * scaleW, h: h * 0.45, c: '#ffd400' }
+    ];
+    ctx.save();
+    ctx.shadowColor = '#ff5566';
+    ctx.shadowBlur = 16;
+    for (const l of layers) {
+      ctx.fillStyle = l.c;
+      ctx.beginPath();
+      ctx.moveTo(cx - l.w, baseY);
+      ctx.quadraticCurveTo(cx - l.w * 1.1, baseY - l.h * 0.55, cx + wob * (l.h / h), baseY - l.h);
+      ctx.quadraticCurveTo(cx + l.w * 1.1, baseY - l.h * 0.55, cx + l.w, baseY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+
   // ================================================================
   //  DESSIN : entités
   // ================================================================
@@ -2912,6 +3055,7 @@
     drawFronton();
     drawFlag();
     drawTiles();
+    drawFlames();
     for (const c of coins) if (c.x > camX - 20 && c.x < camX + W + 20) drawCoin(c.x, c.y, c.r, c.spin);
     for (const p of powerups) drawPowerup(p);
     for (const e of enemies) {
@@ -3240,6 +3384,9 @@
       },
       player() { return player; },
       enemies() { return enemies; },
+      coins() { return coins; },
+      flames() { return flames.map((f) => Object.assign({ c: f.c }, flameState(f))); },
+      flameCycle: { period: 200, on: 70 },
       grid() { return level.grid.map((r) => r.join('')); },
       def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length }; },
       setPaused, isPaused: () => paused,
