@@ -149,6 +149,8 @@
       g.start(i);
       const d = g.def();
       if (d.boss) continue;
+      // invincible : on teste le drapeau, pas l'esquive (une flamme est juste avant à Bayonne)
+      g.player().star = 1000;
       g.warp(d.flag - 4); g.run(2);
       g.press('right');
       let cleared = false;
@@ -469,6 +471,28 @@
       runs.push({ gagne: fin === 'clear', morts: deaths, secondes: Math.round(f / 60) });
     }
     check('boss battable', runs.every((r) => r.gagne), JSON.stringify(runs));
+  });
+
+  // 22. Le boss ne se téléporte jamais : après avoir reculé contre un mur, il revient en
+  //     marchant (bug : bond de 41 px en une image quand il repassait en marche)
+  safe('boss sans téléportation', () => {
+    if (!g.boss) { check('boss sans téléportation', false, 'g.boss absent'); return; }
+    const n = g.def().levels;
+    let bi = -1; for (let i = 0; i < n; i++) { g.start(i); if (g.def().boss) { bi = i; break; } }
+    let worst = 0;
+    for (const side of [-1, 1]) {
+      g.start(bi);
+      const b = g.boss(), p = g.player();
+      b.x = side < 0 ? 6 : 390 - b.w - 6; b.state = 'hit'; b.t = 50;
+      p.x = side < 0 ? 330 : 30; p.y = GROUND_Y - p.h; p.star = 999;
+      let prev = b.x;
+      for (let i = 0; i < 90; i++) {
+        const st = b.state; g.run(1);
+        if (st !== 'air' && b.state !== 'air') worst = Math.max(worst, Math.abs(b.x - prev));
+        prev = b.x;
+      }
+    }
+    check('boss sans téléportation', worst < 6, 'déplacement max ' + worst.toFixed(1) + ' px par image hors saut');
   });
 
   g.start(0);

@@ -15,7 +15,11 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 - Démarre la preview avec `preview_start` `{ name: "trashgo-world" }`. La config est dans
   `C:\Users\lesma\Github\.claude\launch.json` et sert `TrashGoMario/public` sur le port 8198.
   Hors de cette machine, lance `python -m http.server 8198 --directory public`.
-- Ouvre `http://localhost:8198/?debug`, puis vérifie avec `read_console_messages` qu'il n'y a aucune erreur.
+- Ouvre `http://localhost:8198/?debug&v=<valeur unique>`, par exemple un horodatage, puis vérifie avec
+  `read_console_messages` qu'il n'y a aucune erreur.
+  **Change la valeur de `v` à chaque rechargement après une modification.** Le serveur Python n'envoie aucun en-tête
+  de cache, donc le navigateur peut garder l'ancienne page. Pour vérifier la version chargée, cherche dans
+  `document.documentElement.outerHTML` un commentaire que tu viens d'ajouter.
 
 ## 2. API de debug (`window.__tg`, seulement avec `?debug`)
 
@@ -35,7 +39,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 21 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 22 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -99,7 +103,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/21, avec le détail des échecs) ;
+- le résultat de la suite (X/22, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

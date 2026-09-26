@@ -1661,7 +1661,9 @@
       // il avance vers le joueur mais s'arrête à distance et ne va jamais contre les murs :
       // il ne peut pas coincer le joueur (ses vraies attaques : rochers et saut)
       if (Math.abs(dx) > 110) b.x += b.facing * bossSpeed();
-      b.x = Math.max(60, Math.min(W - 60 - b.w, b.x));
+      // trop près d'un mur (après avoir reculé) : il s'en écarte en marchant, sans téléportation
+      if (b.x < 60) b.x = Math.min(60, b.x + 1.5);
+      else if (b.x > W - 60 - b.w) b.x = Math.max(W - 60 - b.w, b.x - 1.5);
       if (b.t > 100 - (3 - b.hp) * 20) { b.t = 0; b.attack++; b.state = (b.attack % 2) ? 'throw' : 'crouch'; }
     } else if (b.state === 'throw') {
       if (b.t === 26) {
