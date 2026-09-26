@@ -7,8 +7,12 @@ horizontal façon Super Mario.
 
 ## Le jeu
 
-- **3 niveaux** : 1-1 Biarritz, 1-2 Anglet (skatepark de plage), 1-3 Bayonne (de nuit).
-  Ensuite ça reboucle en 2-1, 2-2… avec des ennemis plus rapides.
+- **3 niveaux + un boss** : 1-1 Biarritz (de jour : Grande Plage, Rocher de la Vierge,
+  Hôtel du Palais, crampottes), 1-2 Anglet (skatepark de plage), 1-3 Bayonne (de nuit),
+  puis 1-4 **La Rhune** : le boss **Tartalo**, cyclope géant de la mythologie basque
+  (béret, gilet en peau de mouton, makila). Il lance des rochers qui roulent et fait une onde
+  de choc en retombant ; quand il est **sonné** (étoiles), saute-lui sur la tête — 3 coups.
+  « ZORIONAK ! », puis ça reboucle en 2-1, 2-2… avec des ennemis plus rapides.
 - **Contrôles clavier** : ← → (ou Q/D) pour courir, Espace / ↑ / Z pour sauter
   (maintenir = saut plus haut). Les figures sont automatiques à chaque saut.
 - **Mobile** : manette tactile sous l'écran — croix ◀ ▶ d'un seul bloc (on glisse le
@@ -19,7 +23,8 @@ horizontal façon Super Mario.
 - Cônes qui marchent = Goomba, mouettes = ennemis volants : on leur saute dessus.
 - Blocs `?` = pièces, briques cassables quand on est grand.
 - **Gâteau basque** = champignon (on grandit), **piment d'Espelette** = étoile (invincible).
-- Les tuyaux sont des **poubelles** vertes, l'arrivée est un **fronton** basque.
+- Les tuyaux sont des **tonneaux de cidrerie** (« SAGARDOA »), l'arrivée est un **fronton** basque.
+- Des **flammes** jaillissent par moments de bouches d'égout : attends qu'elles s'éteignent ou saute par-dessus.
 - Rails : glissade automatique à l'atterrissage. Chaque saut lance une figure
   (salto, grand écart, vrille à tour de rôle) : si elle se termine en l'air, points × combo.
 - 3 vies, checkpoint à mi-niveau, 100 pièces = 1UP, chrono de 300.

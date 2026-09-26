@@ -33,6 +33,7 @@
     for (let i = 0; i < n; i++) {
       g.start(i);
       const grid = g.grid(), d = g.def();
+      if (d.boss) continue; // arène du boss : ni drapeau ni fronton (testée à part)
       for (let r = 0; r < grid.length; r++) {
         for (let c = 0; c < d.cols; c++) {
           if (grid[r][c] !== 'T') continue;
@@ -147,6 +148,7 @@
     for (let i = 0; i < n; i++) {
       g.start(i);
       const d = g.def();
+      if (d.boss) continue;
       g.warp(d.flag - 4); g.run(2);
       g.press('right');
       let cleared = false;
@@ -157,7 +159,7 @@
       const inf = g.info();
       out.push({ niveau: i + 1, cleared, bonus: inf.score - score0, suivant: inf.levelIndex });
     }
-    check('drapeau', out.every((o, i) => o.cleared && o.bonus > 0 && o.suivant === i + 1), JSON.stringify(out));
+    check('drapeau', out.length > 0 && out.every((o) => o.cleared && o.bonus > 0 && o.suivant === o.niveau), JSON.stringify(out));
   });
 
   // 11. Figures automatiques : un grand saut finit sa figure (points), un petit saut
@@ -369,6 +371,104 @@
       }
     }
     check('flammes franchissables', tested > 0 && problems.length === 0, problems.length ? problems.join(' | ') : tested + " flammes franchies en sautant pendant qu'elles brûlent");
+  });
+
+  // 20. Boss Tartalo (arène après le 3e niveau) : il blesse au contact, lance des rochers,
+  //     fait une onde de choc, n'est vulnérable que SONNÉ, meurt en 3 coups, puis monde suivant
+  safe('boss', () => {
+    if (!g.boss) { check('boss', false, 'g.boss absent du mode debug'); return; }
+    const n = g.def().levels;
+    let bi = -1;
+    for (let i = 0; i < n; i++) { g.start(i); if (g.def().boss) { bi = i; break; } }
+    if (bi < 0) { check('boss', false, 'aucun niveau de boss'); return; }
+    const problems = [];
+    const p = g.player();
+    // a) contact de côté = blessé
+    g.start(bi);
+    let b = g.boss(); b.state = 'walk'; b.t = 0;
+    p.x = b.x - p.w - 2; p.y = GROUND_Y - p.h; g.press('right'); g.run(20); g.release('right');
+    if (g.info().state !== 'dying') problems.push('pas blessé au contact');
+    // b) il finit par lancer un rocher et par sauter (onde de choc)
+    g.start(bi); b = g.boss(); p.x = 20; p.star = 2000;
+    let rock = false, wave = false;
+    for (let k = 0; k < 900 && !(rock && wave); k++) { g.run(1); if (g.bossRocks().length) rock = true; if (g.shockwaves().length) wave = true; }
+    if (!rock) problems.push('ne lance jamais de rocher');
+    if (!wave) problems.push("pas d'onde de choc");
+    // c) sauter sur sa tête quand il N'EST PAS sonné : pas de dégât au boss
+    g.start(bi); b = g.boss(); b.state = 'walk'; b.t = 0; p.star = 2000;
+    g.place(b.x + 10, b.y - p.h - 20, 3); g.run(15);
+    if (b.hp !== 3) problems.push('prend des dégâts sans être sonné');
+    // d) sonné : 3 coups sur la tête → K.O. → bonus → monde suivant
+    g.start(bi); b = g.boss();
+    const score0 = g.info().score;
+    for (let hit = 0; hit < 3; hit++) {
+      b.state = 'stunned'; b.t = 0; b.flash = 0; b.y = GROUND_Y - b.h;
+      g.place(b.x + 10, b.y - p.h - 24, 3);
+      let k = 0; while (b.hp === 3 - hit && k < 30) { g.run(1); k++; }
+      p.x = 10; p.y = GROUND_Y - p.h; p.vx = 0; p.vy = 0; p.star = 200;
+    }
+    if (b.hp !== 0) problems.push('encore ' + b.hp + ' PV après 3 coups');
+    let k = 0; while (g.info().state !== 'clear' && k < 300) { g.run(1); k++; }
+    const cleared = g.info().state === 'clear';
+    g.run(700);
+    const inf = g.info();
+    if (!cleared) problems.push('pas de victoire après le K.O.');
+    if (inf.score - score0 < 5000) problems.push('bonus trop faible (' + (inf.score - score0) + ')');
+    if (inf.levelIndex !== bi + 1) problems.push('pas de passage au monde suivant (niveau ' + inf.levelIndex + ')');
+    check('boss', problems.length === 0, problems.length ? problems.join(' | ') : 'Tartalo : contact blessant, rochers, onde de choc, invulnérable hors étourdissement, K.O. en 3 coups, +' + (inf.score - score0) + ' pts, monde suivant OK');
+  });
+
+  // 21. Boss battable SANS TRICHE : un robot qui joue « proprement » (esquive rochers et
+  //     ondes de choc, s'écarte du point de chute, saute sur la tête quand il est sonné)
+  //     doit gagner. Bugs historiques : le boss coinçait le joueur contre le mur, des planches
+  //     au-dessus de lui empêchaient de toucher sa tête, le toucher sonné blessait, les rochers
+  //     retombaient pile sur le joueur.
+  safe('boss battable', () => {
+    if (!g.boss) { check('boss battable', false, 'g.boss absent'); return; }
+    const W = 390, n = g.def().levels;
+    let bi = -1; for (let i = 0; i < n; i++) { g.start(i); if (g.def().boss) { bi = i; break; } }
+    const runs = [];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      g.start(bi); const p = g.player(); let b = g.boss();
+      for (let w = 0; w < attempt * 13; w++) g.run(1);
+      let jumpHold = 0, target = null, deaths = 0, f = 0, fin = '';
+      for (; f < 60 * 120; f++) {
+        const st = g.info().state;
+        if (st === 'clear' || st === 'over') { fin = st; break; }
+        b = g.boss();
+        if (st !== 'playing') { ['left', 'right', 'jump'].forEach((k) => g.release(k)); jumpHold = 0; target = null; g.run(1); continue; }
+        const pc = p.x + p.w / 2, bc = b.x + b.w / 2, dist = bc - pc;
+        let want = 0, jump = false;
+        const rockDanger = g.bossRocks().some((r) => { const d = pc - r.x; return Math.abs(d) < 62 && Math.sign(r.vx) === Math.sign(d) && r.y > GROUND_Y - 60; });
+        const waveDanger = g.shockwaves().some((w) => Math.abs(w.x - pc) < 48 && Math.sign(w.dir) === Math.sign(pc - w.x));
+        if (b.state === 'stunned') {
+          target = null;
+          if (p.onGround) { if (Math.abs(dist) > 30) want = Math.sign(dist); if (Math.abs(dist) < 58) jump = true; }
+          else want = Math.abs(dist) > 6 ? Math.sign(dist) : 0;
+        } else if (b.state === 'crouch' || b.state === 'air') {
+          let land = bc;
+          if (b.state === 'air') { let y = b.y, vy = b.vy, x = bc; while (y + b.h < GROUND_Y && vy < 40) { vy += 0.495; y += vy; x += b.vx; } land = x; }
+          else land = bc + Math.max(-2.8, Math.min(2.8, (pc - bc) / 48)) * 46;
+          const left = land - 100, right = land + 100, okL = left > 20, okR = right < W - 20;
+          target = (okL && (!okR || Math.abs(pc - left) < Math.abs(pc - right))) ? left : right;
+          const crossing = Math.sign(target - pc) === Math.sign(dist) && Math.abs(dist) < 70;
+          const bossHigh = b.state === 'air' && (GROUND_Y - (b.y + b.h)) > 45;
+          if (Math.abs(target - pc) > 6 && (!crossing || bossHigh || (b.state === 'crouch' && Math.abs(dist) > 70))) want = Math.sign(target - pc);
+        } else {
+          target = null;
+          if (Math.abs(dist) < 120) want = -Math.sign(dist) || 1; else if (Math.abs(dist) > 180) want = Math.sign(dist);
+          if ((p.x < 12 && want < 0) || (p.x > W - p.w - 12 && want > 0)) want = 0;
+        }
+        if ((rockDanger || waveDanger) && p.onGround) jump = true;
+        g.release('left'); g.release('right'); if (want < 0) g.press('left'); else if (want > 0) g.press('right');
+        if (jump && jumpHold === 0) { g.press('jump'); jumpHold = 22; } if (jumpHold > 0) { jumpHold--; if (jumpHold === 0) g.release('jump'); }
+        g.run(1);
+        if (g.info().state === 'dying') deaths++;
+      }
+      ['left', 'right', 'jump'].forEach((k) => g.release(k));
+      runs.push({ gagne: fin === 'clear', morts: deaths, secondes: Math.round(f / 60) });
+    }
+    check('boss battable', runs.every((r) => r.gagne), JSON.stringify(runs));
   });
 
   g.start(0);

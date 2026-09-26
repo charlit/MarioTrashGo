@@ -21,13 +21,13 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 | Appel | Effet |
 |---|---|
-| `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, 3+ = monde 2…), intro sautée |
+| `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, 3 = boss Tartalo à la Rhune, 4+ = monde 2…), intro sautée |
 | `run(n)` | Avance de `n` images (60 par seconde de jeu) |
 | `press(k)` / `release(k)` | Touches `left`, `right`, `jump` (les figures sont automatiques) |
 | `warp(col)` | Téléporte le joueur à la colonne `col`, sans changer sa hauteur |
 | `place(x, y, vy)` | Place le joueur au pixel près, avec une vitesse verticale |
 | `info()` | `{ state, levelIndex, score, coinCount, lives, timeLeft, big, x, y, onGround, grinding, camX, enemies }` |
-| `player()` / `enemies()` / `coins()` / `flames()` | Objets du jeu, modifiables directement (ex. `e.active = true`) |
+| `player()` / `enemies()` / `coins()` / `flames()` / `boss()` / `bossRocks()` / `shockwaves()` | Objets du jeu, modifiables directement (ex. `e.active = true`) |
 | `grid()` | Niveau en texte, une chaîne par rangée (légende des tuiles dans le code : `# B ? M E X S = R T t p q`) |
 | `def()` / `consts` | Infos du niveau (`cols`, `flag`, `checkpoint`) et constantes (`T`, `GROUND_ROW`, `GROUND_Y`…) |
 | `setPaused(b)` / `isPaused()` / `setCoins(n)` | Pause, et nombre de pièces (pour tester le 1UP) |
@@ -35,7 +35,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 19 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 21 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -56,7 +56,11 @@ Règles de jeu que la suite protège :
 - Le saut monte à au moins 100 px sur place et au moins 126 px avec élan. Aucune poubelle ne dépasse **4 tuiles**,
   et aucune marche d'escalier ne dépasse 4 tuiles. (Bug historique : la 3e poubelle du 1-1 était infranchissable.)
 - Chaque niveau a du sol au départ et au checkpoint, un socle `S` sous le drapeau, et un fronton entier avant la fin.
-- Drapeau → bonus de temps → niveau suivant, pour **chaque** niveau.
+- Drapeau → bonus de temps → niveau suivant, pour **chaque** niveau (sauf l'arène du boss, sans drapeau).
+- Boss Tartalo (4e niveau) : blesse au contact, lance des rochers, onde de choc à l'atterrissage, vulnérable seulement
+  quand il est sonné (étoiles), K.O. en 3 coups sur la tête, bonus puis monde suivant.
+  Il doit rester BATTABLE sans triche : un robot qui esquive et saute sur la tête quand il est sonné doit gagner
+  (test « boss battable »). Il ne doit jamais coincer le joueur, ni être protégé par une plateforme au-dessus de lui.
 - Sauter sur place en boucle ne rapporte presque rien, et le combo reste plafonné à x8.
   (Bug historique : les figures automatiques faisaient monter le combo sans limite.)
 - Les pièces au-dessus d'un rail se ramassent en glissant, sans sauter (posées à hauteur du rail + 1).
@@ -73,8 +77,8 @@ Vérifie :
 - **Flammes** : grille sur le trottoir, braises + lueur en alerte, grande flamme néon quand elles brûlent.
 - **Pas de planche de skate** visible, ni au sol ni en l'air ni au crash.
 - **Figures** (automatiques à chaque saut, à tour de rôle) : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient). Il n'y a plus de touche FIGURE.
-- **Décors** : Biarritz (vagues, rocher, phare), Anglet (dunes, planches de surf), Bayonne (nuit, étoiles, lauburu).
-  Vérifie aussi les poubelles vertes, les blocs `?` jaunes, le drapeau au lauburu et le fronton « ONGI ETORRI ».
+- **Décors** : Biarritz DE JOUR (ciel bleu, nuages, mer turquoise et surfeurs, Hôtel du Palais, phare blanc, tentes rayées, Rocher de la Vierge et passerelle, crampottes, promenade blanche, palmiers, hortensias), la Rhune (montagne, fronton, moutons), Anglet (dunes, planches de surf), Bayonne (nuit, étoiles, lauburu).
+  Vérifie aussi les tonneaux de cidrerie (cerclages, robinet, goutte de cidre), les blocs `?` jaunes, le drapeau au lauburu et le fronton « ONGI ETORRI ».
 - **Mobile** : `resize_window` en preset `mobile`, puis recharge la page. La manette doit s'afficher sous le canvas,
   sans défilement horizontal. Envoie des `PointerEvent` (`pointerType: 'touch'`, `clientX`) sur `#dpad` :
   un `pointerdown` à droite doit activer `keys.right`, puis un `pointermove` vers la gauche **sans pointerup**
@@ -95,7 +99,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/19, avec le détail des échecs) ;
+- le résultat de la suite (X/21, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

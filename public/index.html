@@ -685,6 +685,11 @@
         melody: [220.00, 261.63, 329.63, 261.63, 293.66, 349.23, 329.63, 246.94],
         bass:   [110.00, null,   110.00, null,   146.83, null,   164.81, null],
         bpm: 126
+      },
+      { // Boss Tartalo : rapide et menaçant
+        melody: [220.00, null, 220.00, 261.63, 246.94, null, 196.00, 220.00, 174.61, null, 174.61, 220.00, 207.65, null, 164.81, null],
+        bass:   [110.00, 110.00, null, 110.00, 98.00, 98.00, null, 98.00, 87.31, 87.31, null, 87.31, 82.41, 82.41, null, 82.41],
+        bpm: 152
       }
     ];
     let song = SONGS[0];
@@ -1001,10 +1006,17 @@
 
   // ---- Définition des 3 villes : même palette que TrashGO ----
   const themes = [
-    { key: 'biarritz', name: 'BIARRITZ', sky: ['#12283a', '#2c5468'], silhouette: '#0a1c28', sun: '#ffd8a8', accent: '#ff2fa0', draw: drawBiarritzUnit },
+    // Biarritz en plein jour : ciel bleu, sol en dalles claires de la promenade
+    { key: 'biarritz', name: 'BIARRITZ', day: true, sky: ['#4aa9ea', '#d6f1ff'], silhouette: '#0a1c28', sun: '#fff6c2', accent: '#ff2fa0', draw: null,
+      ground: { top: '#e6d6b4', joint: '#c9b48f', body: '#44525f', under: '#36424d' } },
     { key: 'anglet',   name: 'ANGLET',   sky: ['#1a2f3f', '#3d6b6f'], silhouette: '#0d2024', sun: '#ffe9a8', accent: '#7fffd4', draw: drawAngletUnit },
-    { key: 'bayonne',  name: 'BAYONNE',  sky: ['#241a35', '#4a2f55'], silhouette: '#160f22', sun: '#ffb3d9', accent: '#b400ff', draw: drawBayonneUnit }
+    { key: 'bayonne',  name: 'BAYONNE',  sky: ['#241a35', '#4a2f55'], silhouette: '#160f22', sun: '#ffb3d9', accent: '#b400ff', draw: drawBayonneUnit },
+    // boss : la Rhune de nuit, fronton et bergerie de Tartalo
+    { key: 'rhune',    name: 'LA RHUNE', boss: true, sky: ['#120a22', '#47203f'], silhouette: '#120a1c', sun: '#fff0c8', accent: '#ff2fa0', draw: null,
+      ground: { top: '#2e5a33', joint: '#234a28', body: '#1a1410', under: '#140f0c' } }
   ];
+  const DEFAULT_GROUND = { top: '#1d1330', joint: '#0d0616', body: '#0d0616', under: '#0d0616' };
+  const groundOf = (theme) => theme.ground || DEFAULT_GROUND;
 
   // Chaque niveau est construit avec un petit "éditeur" (plus lisible et moins
   // fragile qu'une grande carte ASCII). h = hauteur en tuiles au-dessus du sol.
@@ -1076,6 +1088,14 @@
         L.row(176, 1, 'S');
         L.flame(41, 50); L.flame(134, 100); L.flame(172, 150);
       }
+    },
+    { // 1-4 LA RHUNE : boss Tartalo, le cyclope géant de la mythologie basque.
+      // Arène d'un seul écran (13 colonnes), murs aux extrémités, sol plat comme une aire de fronton.
+      // Pas de plateforme : une planche au-dessus du boss empêcherait de lui sauter sur la tête.
+      cols: 13, checkpoint: 999, flag: -1, boss: true,
+      build(L) {
+        L.ground(0, 13);
+      }
     }
   ];
 
@@ -1143,6 +1163,8 @@
 
   let enemies = [], coins = [], powerups = [], particles = [], floatingTexts = [], popCoins = [], debris = [];
   let flames = [];
+  // boss (arène de la Rhune)
+  let boss = null, bossRocks = [], shockwaves = [], shake = 0;
   let bumps = {}; // "c,r" -> frames d'animation de bloc cogné
   let runPhase = 0; // cycle de course des jambes
 
@@ -1278,6 +1300,8 @@
     enemies = level.enemies;
     coins = level.coins;
     flames = level.flames;
+    boss = level.def.boss ? createBoss() : null;
+    bossRocks = []; shockwaves = []; shake = 0;
     powerups = []; particles = []; floatingTexts = []; popCoins = []; debris = [];
     bumps = {};
     clearPhase = null; playerHidden = false;
@@ -1601,10 +1625,133 @@
 
     // ---- mât d'arrivée ----
     // on touche le mât… ou son socle en pierre quand on arrive au sol
-    if (player.x + player.w >= level.def.flag * T - 1) { levelClear(); return; }
+    if (!level.def.boss && player.x + player.w >= level.def.flag * T - 1) { levelClear(); return; }
 
     updateEntities();
     updateCamera();
+  }
+
+  // ================================================================
+  //  BOSS : TARTALO, le cyclope géant de la mythologie basque
+  //  Il lance des rochers, puis saute et retombe en créant une onde de choc.
+  //  Après chaque saut il reste SONNÉ (étoiles) : c'est le moment de lui sauter
+  //  sur la tête. 3 coups, et il accélère à chaque fois.
+  // ================================================================
+  function createBoss() {
+    return { x: 8 * T, y: GROUND_Y - 92, w: 56, h: 92, vx: 0, vy: 0, hp: 3, state: 'walk', t: 0, facing: -1, flash: 0, attack: 0, rot: 0 };
+  }
+  function bossSpeed() { return 0.7 + (3 - boss.hp) * 0.35 + (level.loop || 0) * 0.3; }
+
+  function updateBoss() {
+    if (shake > 0) shake--;
+    if (!boss || boss.state === 'gone') return;
+    const b = boss;
+    b.t++;
+    if (b.flash > 0) b.flash--;
+    if (b.state === 'down') {
+      // Tartalo bascule en arrière… et s'écroule
+      b.rot = Math.min(Math.PI / 2, b.t / 60 * (Math.PI / 2));
+      if (b.t === 60) { shake = 24; Audio2.crashSfx(); }
+      if (b.t > 110) bossDefeated();
+      return;
+    }
+    const dx = (player.x + player.w / 2) - (b.x + b.w / 2);
+    if (b.state === 'walk') b.facing = dx < 0 ? -1 : 1;
+    if (b.state === 'walk') {
+      // il avance vers le joueur mais s'arrête à distance et ne va jamais contre les murs :
+      // il ne peut pas coincer le joueur (ses vraies attaques : rochers et saut)
+      if (Math.abs(dx) > 110) b.x += b.facing * bossSpeed();
+      b.x = Math.max(60, Math.min(W - 60 - b.w, b.x));
+      if (b.t > 100 - (3 - b.hp) * 20) { b.t = 0; b.attack++; b.state = (b.attack % 2) ? 'throw' : 'crouch'; }
+    } else if (b.state === 'throw') {
+      if (b.t === 26) {
+        // lancé à ras du sol depuis la main : le rocher tombe vite puis ROULE vers le joueur (à sauter)
+        bossRocks.push({ x: b.x + b.w / 2 + b.facing * 30, y: b.y + 50, vx: b.facing * (2.1 + (3 - b.hp) * 0.35), vy: -2, r: 11, rot: 0, bounced: false });
+        Audio2.bumpSfx();
+      }
+      if (b.t > 50) { b.state = 'walk'; b.t = 0; }
+    } else if (b.state === 'crouch') {
+      // il s'accroupit 0,6 s avant de sauter (on a le temps de réagir) et vise un peu court
+      if (b.t > 34) { b.state = 'air'; b.t = 0; b.vy = -11.5; b.vx = Math.max(-2.8, Math.min(2.8, dx / 48)); }
+    } else if (b.state === 'air') {
+      b.vy += GRAVITY * 0.9; b.x += b.vx; b.y += b.vy;
+      if (b.vy > 0 && b.y + b.h >= GROUND_Y) {
+        b.y = GROUND_Y - b.h; b.vy = 0; b.state = 'stunned'; b.t = 0;
+        shake = 18;
+        Audio2.crashSfx();
+        const cx = b.x + b.w / 2;
+        shockwaves.push({ x: cx, dir: -1, life: 60 }, { x: cx, dir: 1, life: 60 });
+      }
+    } else if (b.state === 'stunned') {
+      if (b.t > 115 - (3 - b.hp) * 15) { b.state = 'walk'; b.t = 0; }
+    } else if (b.state === 'hit') {
+      // touché : il recule en titubant, loin du joueur…
+      b.x -= Math.sign(dx || 1) * 1.3;
+      // …et ne redevient dangereux que quand le joueur ne lui colle plus
+      const near = Math.abs(dx) < b.w / 2 + player.w / 2 + 6;
+      if (b.t > 45 && !near) { b.state = 'walk'; b.t = 0; }
+    }
+    b.x = Math.max(4, Math.min(W - b.w - 4, b.x));
+
+    // ---- contact avec le joueur ----
+    const head = { x: b.x + 8, y: b.y, w: b.w - 16, h: 20 };
+    const body = { x: b.x + 10, y: b.y + 16, w: b.w - 20, h: b.h - 16 };
+    if (b.state === 'stunned' && player.vy > 0 && player.prevY + player.h <= b.y + 18 && overlap(player, head)) {
+      b.hp--;
+      b.flash = 45;
+      addScore(1000, b.x, b.y - 10, '#ffd400', 'BAM !');
+      bumpCombo();
+      Audio2.stompSfx();
+      buzz(30);
+      player.vy = -10; player.jumpCut = false;
+      player.vx = (player.x + player.w / 2 < b.x + b.w / 2) ? -3.5 : 3.5;
+      startAutoTrick();
+      if (b.hp <= 0) { b.state = 'down'; b.t = 0; Audio2.stopMusic(); }
+      else { b.state = 'hit'; b.t = 0; }
+    } else if (b.state !== 'hit' && b.state !== 'stunned' && (overlap(player, body) || overlap(player, head))) {
+      // sonné, il est inoffensif : on peut s'approcher pour lui sauter sur la tête
+      hurtPlayer();
+    }
+
+    // ---- rochers qui roulent ----
+    for (const r of bossRocks) {
+      r.vy = Math.min(r.vy + GRAVITY * 0.8, 10);
+      r.x += r.vx; r.y += r.vy; r.rot += r.vx * 0.08;
+      if (r.y + r.r >= GROUND_Y) { r.y = GROUND_Y - r.r; r.vy = r.bounced ? 0 : -3; r.bounced = true; }
+      if (r.x < r.r || r.x > W - r.r) {
+        r.dead = true;
+        for (let i = 0; i < 4; i++) debris.push({ x: r.x, y: r.y, vx: (Math.random() - 0.5) * 4, vy: -3 - Math.random() * 3, rot: 0, rock: true });
+      }
+      const box = { x: r.x - r.r + 3, y: r.y - r.r + 3, w: 2 * r.r - 6, h: 2 * r.r - 6 };
+      if (!r.dead && overlap(player, box)) {
+        if (player.vy > 0 && player.prevY + player.h <= r.y - r.r + 8) {
+          // on peut briser un rocher en lui sautant dessus
+          r.dead = true; player.vy = -7; addScore(100, r.x, r.y - 10); Audio2.breakSfx();
+        } else hurtPlayer();
+      }
+    }
+    bossRocks = bossRocks.filter((r) => !r.dead);
+
+    // ---- ondes de choc au sol : il faut être en l'air ----
+    for (const w of shockwaves) {
+      w.x += w.dir * 3.4; w.life--;
+      if (overlap(player, { x: w.x - 10, y: GROUND_Y - 16, w: 20, h: 16 })) hurtPlayer();
+    }
+    shockwaves = shockwaves.filter((w) => w.life > 0 && w.x > -20 && w.x < W + 20);
+  }
+
+  function bossDefeated() {
+    boss.state = 'gone';
+    addScore(5000, boss.x, boss.y + 20, '#ffd400', 'TARTALO K.O.');
+    showMilestoneBanner('ZORIONAK !', 3400);
+    Audio2.flagSfx();
+    bossRocks = []; shockwaves = [];
+    Audio2.stopGrindSfx();
+    grinding = false; trick = null;
+    player.vx = 0;
+    state = 'clear';
+    clearPhase = 'tally';
+    playerHidden = false;
   }
 
   // ---- flammes au sol : repos → alerte (braises) → flammes, en boucle ----
@@ -1642,6 +1789,8 @@
 
   function updateEntities() {
     updateFlames();
+    if (state !== 'playing') return;
+    updateBoss();
     if (state !== 'playing') return;
     // ---- ennemis ----
     for (const e of enemies) {
@@ -1828,10 +1977,37 @@
     const waveY = GROUND_Y - 70;
     // mer opaque : la ville Belle Époque reste de l'autre côté de la baie
     const sea = ctx.createLinearGradient(0, waveY - 14, 0, GROUND_Y);
-    sea.addColorStop(0, '#1d4a62');
-    sea.addColorStop(1, '#0f2c3d');
+    sea.addColorStop(0, '#2fa8de');
+    sea.addColorStop(1, '#17799f');
     ctx.fillStyle = sea;
     ctx.fillRect(0, waveY - 14, W, GROUND_Y - waveY + 14);
+    // reflets du soleil sur l'eau
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let i = 0; i < 14; i++) {
+      const rx = ((i * 131 - scroll * 0.2 + frame * 0.2) % (W + 40) + W + 40) % (W + 40) - 20;
+      ctx.fillRect(rx, waveY - 8 + (i * 17) % 40, 6 + (i % 3) * 4, 1.5);
+    }
+    // surfeurs sur les vagues (la Grande Plage)
+    for (let i = 0; i < 3; i++) {
+      const sx = ((i * 170 + 60 - scroll * 0.3 + frame * 0.5) % (W + 80) + W + 80) % (W + 80) - 40;
+      const sy = waveY + 8 + Math.sin(frame * 0.05 + i) * 2;
+      // gerbe d'écume derrière la planche
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(sx - 11, sy - 1, 3, 0, Math.PI * 2); ctx.arc(sx - 15, sy + 1, 2, 0, Math.PI * 2); ctx.fill();
+      // planche colorée
+      ctx.fillStyle = ['#ffd400', '#ff2fa0', '#7fffd4'][i];
+      ctx.beginPath(); ctx.ellipse(sx, sy, 10, 2, -0.12, 0, Math.PI * 2); ctx.fill();
+      // surfeur accroupi : jambes fléchies, buste penché, bras écartés
+      ctx.strokeStyle = '#1d2a3a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx - 4, sy - 1); ctx.lineTo(sx - 1, sy - 6); ctx.lineTo(sx + 3, sy - 1);   // jambes
+      ctx.moveTo(sx - 1, sy - 6); ctx.lineTo(sx + 2, sy - 11);                             // buste penché
+      ctx.moveTo(sx - 5, sy - 10); ctx.lineTo(sx + 1, sy - 9); ctx.lineTo(sx + 7, sy - 7); // bras écartés
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+      ctx.fillStyle = '#1d2a3a';
+      ctx.beginPath(); ctx.arc(sx + 3, sy - 13, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
     const layers = [
       { a: 0.22, lw: 1.5, step: 60, dy: -6, amp: 6, f: 0.15 },
       { a: 0.32, lw: 2, step: 46, dy: 10, amp: 7, f: 0.3 },
@@ -2180,46 +2356,167 @@
     g.fill();
   }
 
-  // ---- BIARRITZ : front de mer Belle Époque de l'autre côté de la baie ----
+  // ---- BIARRITZ DE JOUR : la côte Belle Époque, la Grande Plage, le Rocher de la Vierge ----
+  function palmTreeDay(g, x, base, h) {
+    g.strokeStyle = '#8a6a48'; g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(x, base); g.quadraticCurveTo(x + 8, base - h / 2, x + 4, base - h);
+    g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1;
+    for (let k = 8; k < h; k += 7) { g.beginPath(); g.moveTo(x + 2, base - k); g.lineTo(x + 7, base - k - 1); g.stroke(); }
+    const cx = x + 4, cy = base - h;
+    for (let i = 0; i < 8; i++) {
+      const a = -Math.PI + (i / 7) * Math.PI + (i % 2 ? 0.15 : -0.1);
+      g.fillStyle = i % 2 ? '#2f8a4e' : '#3fa35c';
+      g.beginPath();
+      g.moveTo(cx, cy);
+      g.quadraticCurveTo(cx + Math.cos(a) * 15, cy + Math.sin(a) * 15 - 6, cx + Math.cos(a) * 26, cy + Math.sin(a) * 12 + 9);
+      g.quadraticCurveTo(cx + Math.cos(a) * 12, cy + Math.sin(a) * 10, cx, cy + 2);
+      g.fill();
+    }
+    g.fillStyle = '#6b4a2a';
+    g.beginPath(); g.arc(cx - 2, cy + 3, 2.5, 0, Math.PI * 2); g.arc(cx + 3, cy + 4, 2.5, 0, Math.PI * 2); g.fill();
+  }
+
+  // massif d'hortensias (bleus, mauves, roses), la fleur du Pays basque
+  function hydrangea(g, rnd, x, base) {
+    g.fillStyle = '#3f8f5a';
+    g.beginPath(); g.ellipse(x, base - 7, 18, 9, 0, Math.PI, 0); g.fill();
+    const cols = ['#8fb4ec', '#b9a3e8', '#f19cc8', '#a9c8f4'];
+    for (let k = 0; k < 6; k++) {
+      g.fillStyle = cols[Math.floor(rnd() * cols.length)];
+      g.beginPath(); g.arc(x - 12 + k * 5, base - 10 - (k % 2) * 4, 5, 0, Math.PI * 2); g.fill();
+    }
+  }
+
   function buildBiarritz() {
     const horizon = GROUND_Y - 84;
-    const far = makeLayer(0.12, 11, (g, rnd, wrap) => {
-      for (let x = 0; x < LAYER_W;) {
-        let w = 34 + rnd() * 50; const h = 40 + rnd() * 70;
-        if (x + w > LAYER_W) { w = LAYER_W - x; if (w < 16) break; }
-        const roof = ['mansard', 'mansard', 'flat', 'dome', 'gable'][Math.floor(rnd() * 5)];
-        const bx = x;
-        wrap(bx, w, (xx) => building(g, rnd, xx, horizon, w, h, {
-          color: '#1a3b50', roof,
-          win: { w: 3, h: 4, gx: 5, gy: 7, mx: 5, top: 8, bottom: 6, lit: 0.3, color: '#ffd8a8', alpha: 0.7 }
-        }));
-        x += w + 2 + rnd() * 6;
+    // nuages de beau temps, très lents
+    const clouds = makeLayer(0.05, 10, (g, rnd, wrap) => {
+      for (let i = 0; i < 9; i++) {
+        const cx = rnd() * LAYER_W, cy = 70 + rnd() * 170, sc = 0.7 + rnd() * 0.8;
+        wrap(cx - 50 * sc, 110 * sc, (xx) => {
+          const x0 = xx + 50 * sc;
+          g.fillStyle = 'rgba(255,255,255,0.9)';
+          for (const [dx, dy, r] of [[-30, 4, 16], [-12, -6, 20], [8, -10, 22], [28, -2, 17], [44, 5, 12]]) {
+            g.beginPath(); g.arc(x0 + dx * sc, cy + dy * sc, r * sc, 0, Math.PI * 2); g.fill();
+          }
+          g.fillRect(x0 - 34 * sc, cy + 2 * sc, 80 * sc, 12 * sc);
+          g.fillStyle = 'rgba(160,190,220,0.25)';
+          g.fillRect(x0 - 34 * sc, cy + 10 * sc, 80 * sc, 4 * sc);
+        });
       }
-      // Hôtel du Palais (long bâtiment à coupoles)
-      building(g, rnd, 380, horizon, 230, 92, { color: '#1c3f55', roof: 'mansard', win: { w: 4, h: 5, gx: 7, gy: 9, mx: 8, top: 10, bottom: 8, lit: 0.45, color: '#ffd8a8', alpha: 0.8 } });
-      for (const dx of [20, 115, 210]) building(g, rnd, 380 + dx - 12, horizon - 92, 24, 14, { color: '#1c3f55', roof: 'dome' });
-      // église orthodoxe au bulbe doré
-      building(g, rnd, 1040, horizon, 34, 60, { color: '#1c3f55', roof: 'flat', win: { w: 4, h: 7, gx: 6, gy: 10, mx: 6, top: 10, bottom: 10, lit: 0.6, color: '#ffd8a8', alpha: 0.7 } });
-      g.fillStyle = '#8a7440';
-      g.beginPath(); g.ellipse(1057, horizon - 68, 11, 12, 0, 0, Math.PI * 2); g.fill();
-      g.fillRect(1056, horizon - 88, 2, 10);
-      // phare au loin, avec son faisceau
-      g.fillStyle = '#23465c';
-      g.beginPath(); g.moveTo(1420, horizon); g.lineTo(1426, horizon - 120); g.lineTo(1436, horizon - 120); g.lineTo(1442, horizon); g.fill();
-      g.fillRect(1424, horizon - 128, 14, 8);
-      glow(g, 1431, horizon - 124, 40, '#ffe9a8', 0.5);
     });
+    // de l'autre côté de la baie : collines vertes, villas, Hôtel du Palais, église russe, phare
+    const far = makeLayer(0.12, 11, (g, rnd, wrap) => {
+      g.fillStyle = '#6fa77d';
+      g.beginPath(); g.moveTo(0, horizon);
+      for (let x = 0; x <= LAYER_W; x += 60) g.lineTo(x, horizon - 18 - 14 * Math.sin(x / 190) - 8 * Math.sin(x / 57));
+      g.lineTo(LAYER_W, horizon); g.closePath(); g.fill();
+      const walls = ['#f3ead8', '#efe0c2', '#f6f1e7', '#e8d3b3', '#f1dcc8'];
+      const roofs = ['#c2493d', '#56606e', '#b8563f', '#4f5a6b'];
+      for (let x = 0; x < LAYER_W;) {
+        let w = 30 + rnd() * 40; const h = 26 + rnd() * 44;
+        if (x + w > LAYER_W) { w = LAYER_W - x; if (w < 16) break; }
+        const col = walls[Math.floor(rnd() * walls.length)], roof = roofs[Math.floor(rnd() * roofs.length)];
+        const kind = ['gable', 'mansard', 'gable', 'flat'][Math.floor(rnd() * 4)];
+        building(g, rnd, x, horizon, w, h, { color: col, roof: kind, roofColor: roof,
+          win: { w: 3, h: 5, gx: 5, gy: 7, mx: 5, top: 8, bottom: 6, lit: 0, color: '#ffffff', alpha: 1, dark: '#7d98b5' } });
+        x += w + 4 + rnd() * 26;
+      }
+      // Hôtel du Palais : grand palais crème aux toits d'ardoise et bandeaux de brique
+      building(g, rnd, 380, horizon, 230, 88, { color: '#f1e2c4', roof: 'mansard', roofColor: '#4f5a6b',
+        win: { w: 4, h: 6, gx: 7, gy: 9, mx: 8, top: 12, bottom: 8, lit: 0, color: '#fff', alpha: 1, dark: '#7d98b5' } });
+      g.fillStyle = '#b5553c';
+      for (let yy = horizon - 70; yy < horizon; yy += 16) g.fillRect(380, yy, 230, 2);
+      for (const dx of [20, 115, 210]) building(g, rnd, 380 + dx - 12, horizon - 88, 24, 14, { color: '#4f5a6b', roof: 'dome' });
+      // église orthodoxe russe et son bulbe bleu à croix dorée
+      building(g, rnd, 1040, horizon, 34, 58, { color: '#f3ead8', roof: 'flat', win: { w: 4, h: 7, gx: 6, gy: 10, mx: 6, top: 10, bottom: 10, lit: 0, color: '#fff', alpha: 1, dark: '#7d98b5' } });
+      g.fillStyle = '#3f7fd0';
+      g.beginPath(); g.ellipse(1057, horizon - 66, 12, 13, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(1051, horizon - 74, 3, 10);
+      g.fillStyle = '#e2b84a'; g.fillRect(1056, horizon - 90, 2, 12); g.fillRect(1053, horizon - 86, 8, 2);
+      // phare de Biarritz, tour blanche sur la pointe Saint-Martin
+      g.fillStyle = '#5f9a6d';
+      g.beginPath(); g.moveTo(1360, horizon); g.quadraticCurveTo(1430, horizon - 70, 1500, horizon); g.fill();
+      g.fillStyle = '#fbfaf5';
+      g.beginPath(); g.moveTo(1420, horizon - 34); g.lineTo(1425, horizon - 150); g.lineTo(1437, horizon - 150); g.lineTo(1442, horizon - 34); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(1433, horizon - 150, 4, 116);
+      g.fillStyle = '#2b2f36'; g.fillRect(1423, horizon - 162, 16, 12);
+      g.fillStyle = '#e2b84a'; g.fillRect(1426, horizon - 159, 10, 6);
+      g.fillStyle = '#2b2f36'; g.beginPath(); g.moveTo(1422, horizon - 162); g.lineTo(1431, horizon - 170); g.lineTo(1440, horizon - 162); g.fill();
+    });
+    // la Grande Plage : sable, tentes rayées, parasols, Rocher de la Vierge, crampottes du port
+    const mid = makeLayer(0.32, 12, (g, rnd, wrap) => {
+      const base = GROUND_Y;
+      g.fillStyle = '#f0dcaa'; g.fillRect(0, base - 18, LAYER_W, 18);
+      g.fillStyle = '#f8ebc9'; g.fillRect(0, base - 18, LAYER_W, 3);
+      g.fillStyle = 'rgba(255,255,255,0.8)';
+      for (let x = 0; x < LAYER_W; x += 22) g.fillRect(x + (x % 44 ? 4 : 0), base - 20, 14, 2);
+      // Rocher de la Vierge et sa passerelle blanche (ouvrage d'Eiffel)
+      const rx = 180;
+      g.fillStyle = '#8e7d6c';
+      g.beginPath(); g.moveTo(rx, base - 18); g.lineTo(rx + 8, base - 62); g.lineTo(rx + 26, base - 80); g.lineTo(rx + 50, base - 74); g.lineTo(rx + 66, base - 40); g.lineTo(rx + 74, base - 18); g.closePath(); g.fill();
+      g.fillStyle = '#6f604f';
+      g.beginPath(); g.moveTo(rx + 40, base - 76); g.lineTo(rx + 66, base - 40); g.lineTo(rx + 74, base - 18); g.lineTo(rx + 44, base - 18); g.closePath(); g.fill();
+      g.fillStyle = '#fbfaf5';
+      g.fillRect(rx + 34, base - 98, 5, 18); g.beginPath(); g.arc(rx + 36.5, base - 100, 3, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#fbfaf5'; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(rx - 90, base - 40); g.quadraticCurveTo(rx - 45, base - 70, rx + 6, base - 52); g.stroke();
+      g.lineWidth = 1.5; g.beginPath(); g.moveTo(rx - 90, base - 32); g.quadraticCurveTo(rx - 45, base - 58, rx + 6, base - 44); g.stroke();
+      for (let k = 0; k <= 8; k++) { const t = k / 8, px = rx - 90 + t * 96; const py1 = base - 40 - 30 * Math.sin(t * Math.PI) * 0.9, py2 = py1 + 8; g.beginPath(); g.moveTo(px, py1); g.lineTo(px + 6, py2); g.stroke(); }
+      g.fillStyle = '#8e7d6c'; g.fillRect(rx - 96, base - 40, 10, 22);
+      // tentes rayées bleu et blanc de la Grande Plage
+      const tentRow = (x0, n) => {
+        for (let i = 0; i < n; i++) {
+          const tx = x0 + i * 30;
+          for (let k = 0; k < 24; k += 4) { g.fillStyle = (k / 4) % 2 ? '#ffffff' : '#2f6fb3'; g.fillRect(tx + k, base - 44, 4, 26); }
+          g.fillStyle = '#2f6fb3';
+          g.beginPath(); g.moveTo(tx - 2, base - 44); g.lineTo(tx + 12, base - 56); g.lineTo(tx + 26, base - 44); g.fill();
+          g.fillStyle = '#e63946'; g.fillRect(tx + 11, base - 64, 2, 8); g.fillRect(tx + 13, base - 64, 6, 4);
+        }
+      };
+      tentRow(480, 6); tentRow(1230, 5);
+      // parasols colorés
+      const cols = [['#e63946', '#fff'], ['#ffd400', '#fff'], ['#2f9e8f', '#fff'], ['#ff2fa0', '#fff']];
+      for (let x = 700; x < LAYER_W - 40; x += 90 + Math.floor(rnd() * 60)) {
+        if (x > 1180 && x < 1400) continue;
+        const [c1, c2] = cols[Math.floor(rnd() * cols.length)];
+        g.fillStyle = '#6b4a2a'; g.fillRect(x - 1, base - 44, 2, 28);
+        for (let k = 0; k < 6; k++) {
+          g.fillStyle = k % 2 ? c2 : c1;
+          g.beginPath(); g.moveTo(x, base - 50); g.arc(x, base - 38, 16, Math.PI + (k / 6) * Math.PI, Math.PI + ((k + 1) / 6) * Math.PI); g.closePath(); g.fill();
+        }
+      }
+      // les crampottes du Port des Pêcheurs : petites maisons blanches aux portes colorées
+      g.fillStyle = '#a89a86'; g.fillRect(880, base - 26, 250, 8);
+      const doors = ['#c8102e', '#2f8f4e', '#2f6fb3', '#c8102e', '#2f8f4e', '#2f6fb3', '#c8102e'];
+      for (let i = 0; i < 7; i++) {
+        const hx = 886 + i * 34;
+        g.fillStyle = '#f6f2ea'; g.fillRect(hx, base - 54, 28, 28);
+        g.fillStyle = '#c2493d'; g.beginPath(); g.moveTo(hx - 3, base - 54); g.lineTo(hx + 14, base - 66); g.lineTo(hx + 31, base - 54); g.fill();
+        g.fillStyle = doors[i]; g.fillRect(hx + 9, base - 44, 10, 18);
+        g.fillRect(hx + 2, base - 50, 5, 6); g.fillRect(hx + 21, base - 50, 5, 6);
+      }
+    });
+    // la promenade : balustrade blanche, palmiers, hortensias, lampadaires
     const near = makeLayer(0.75, 13, (g, rnd, wrap) => {
       const base = GROUND_Y;
-      // balustrade de la promenade
-      g.fillStyle = '#0a1a24';
-      g.fillRect(0, base - 22, LAYER_W, 3);
-      g.fillRect(0, base - 6, LAYER_W, 2);
-      for (let x = 2; x < LAYER_W; x += 8) g.fillRect(x, base - 19, 3, 13);
-      for (let x = 60; x < LAYER_W; x += 260) wrap(x, 30, (xx) => palmTree(g, xx, base - 22, 70 + rnd() * 20, '#07141c'));
-      for (let x = 190; x < LAYER_W; x += 260) wrap(x, 12, (xx) => lampPost(g, xx, base - 22, 58, '#0a1a24', '#ffd8a8'));
+      g.fillStyle = '#b8b1a3'; g.fillRect(0, base - 20, LAYER_W, 3);
+      g.fillStyle = '#f4f1ea'; g.fillRect(0, base - 23, LAYER_W, 4); g.fillRect(0, base - 6, LAYER_W, 3);
+      for (let x = 2; x < LAYER_W; x += 9) {
+        g.fillStyle = '#e9e3d6'; g.fillRect(x, base - 19, 4, 13);
+        g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x + 3, base - 19, 1, 13);
+      }
+      for (let x = 60; x < LAYER_W; x += 260) wrap(x, 30, (xx) => palmTreeDay(g, xx, base - 23, 72 + rnd() * 22));
+      for (let x = 130; x < LAYER_W; x += 180) wrap(x, 40, (xx) => hydrangea(g, rnd, xx, base - 23));
+      for (let x = 200; x < LAYER_W; x += 260) wrap(x, 14, (xx) => {
+        g.fillStyle = '#23413a'; g.fillRect(xx - 1.5, base - 83, 3, 60); g.fillRect(xx - 4, base - 26, 8, 3);
+        g.fillStyle = '#f7f3e8'; g.beginPath(); g.arc(xx, base - 88, 5, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#23413a'; g.fillRect(xx - 3, base - 95, 6, 3);
+      });
     });
-    return { far, near, horizon };
+    return { clouds, far, mid, near, horizon };
   }
 
   // ---- ANGLET : pinède, cabines de plage, surf shops, ganivelles ----
@@ -2406,7 +2703,54 @@
     return { far, mid, near };
   }
 
-  const CITY_BUILDERS = { biarritz: buildBiarritz, anglet: buildAnglet, bayonne: buildBayonne };
+  // ---- LA RHUNE : la montagne sacrée, un fronton, la bergerie de Tartalo ----
+  function buildRhune() {
+    const far = makeLayer(0.1, 41, (g) => {
+      // la Rhune et son relais au sommet, montagnes en arrière
+      g.fillStyle = '#1e1030';
+      g.beginPath(); g.moveTo(0, GROUND_Y - 60);
+      for (let x = 0; x <= LAYER_W; x += 40) g.lineTo(x, GROUND_Y - 120 - 40 * Math.sin(x / 130) - 20 * Math.sin(x / 47));
+      g.lineTo(LAYER_W, GROUND_Y); g.lineTo(0, GROUND_Y); g.fill();
+      g.fillStyle = '#2a1638';
+      g.beginPath(); g.moveTo(0, GROUND_Y);
+      g.lineTo(40, GROUND_Y - 140); g.lineTo(150, GROUND_Y - 280); g.lineTo(200, GROUND_Y - 290); g.lineTo(260, GROUND_Y - 250); g.lineTo(390, GROUND_Y - 120); g.lineTo(520, GROUND_Y - 60); g.lineTo(520, GROUND_Y);
+      g.fill();
+      g.fillStyle = '#3a1f4a'; g.fillRect(172, GROUND_Y - 336, 4, 50); g.fillRect(166, GROUND_Y - 300, 16, 12);
+      glow(g, 174, GROUND_Y - 338, 14, '#ff5566', 0.8);
+    });
+    const mid = makeLayer(0.3, 42, (g) => {
+      // fronton de pelote éclairé, et maisons basques (etxe) blanches à colombages rouges
+      const fx = 110, base = GROUND_Y;
+      g.fillStyle = '#a69478';
+      g.beginPath(); g.moveTo(fx, base); g.lineTo(fx, base - 140); g.quadraticCurveTo(fx + 85, base - 200, fx + 170, base - 140); g.lineTo(fx + 170, base); g.fill();
+      g.fillStyle = '#c8102e'; g.fillRect(fx, base - 30, 170, 5);
+      g.fillStyle = '#2f8f4e'; g.fillRect(fx, base - 23, 170, 3);
+      glow(g, fx + 85, base - 90, 90, '#ffd8a8', 0.25);
+      for (const [hx, w] of [[0, 90], [310, 110], [440, 80]]) {
+        g.fillStyle = '#d9d2c4'; g.fillRect(hx, base - 70, w, 70);
+        g.fillStyle = '#6b1f1f'; g.beginPath(); g.moveTo(hx - 6, base - 70); g.lineTo(hx + w / 2, base - 100); g.lineTo(hx + w + 6, base - 70); g.fill();
+        g.fillStyle = '#8e2a2a';
+        g.fillRect(hx, base - 50, w, 3); g.fillRect(hx + w / 2 - 2, base - 70, 4, 70);
+        for (let k = 12; k < w - 10; k += 26) { g.fillStyle = '#8e2a2a'; g.fillRect(hx + k - 4, base - 42, 4, 12); g.fillRect(hx + k + 10, base - 42, 4, 12); g.fillStyle = 'rgba(255,207,138,0.8)'; g.fillRect(hx + k, base - 42, 10, 12); }
+      }
+    });
+    const near = makeLayer(0.75, 43, (g) => {
+      // clôture de la bergerie et les moutons de Tartalo
+      const base = GROUND_Y;
+      g.fillStyle = '#3a2a1e';
+      for (let x = 0; x < LAYER_W; x += 40) g.fillRect(x, base - 26, 4, 26);
+      g.fillRect(0, base - 22, LAYER_W, 3); g.fillRect(0, base - 12, LAYER_W, 3);
+      for (const sx of [70, 250, 330, 900]) {
+        g.fillStyle = '#e8e2d8';
+        for (const [dx, dy, r] of [[0, 0, 8], [8, -3, 8], [16, 0, 8], [8, 3, 7]]) { g.beginPath(); g.arc(sx + dx, base - 14 + dy, r, 0, Math.PI * 2); g.fill(); }
+        g.fillStyle = '#2b2320'; g.beginPath(); g.ellipse(sx + 25, base - 16, 5, 4, 0.3, 0, Math.PI * 2); g.fill();
+        g.fillRect(sx + 2, base - 8, 2, 8); g.fillRect(sx + 14, base - 8, 2, 8);
+      }
+    });
+    return { far, mid, near };
+  }
+
+  const CITY_BUILDERS = { biarritz: buildBiarritz, anglet: buildAnglet, bayonne: buildBayonne, rhune: buildRhune };
   function cityLayers(theme) {
     if (!cityCache[theme.key]) cityCache[theme.key] = CITY_BUILDERS[theme.key]();
     return cityCache[theme.key];
@@ -2419,15 +2763,15 @@
     grad.addColorStop(1, theme.sky[1]);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-    // brume lumineuse de la ville sur l'horizon
+    // brume lumineuse de la ville sur l'horizon (blanche en plein jour)
     const haze = ctx.createLinearGradient(0, GROUND_Y - 260, 0, GROUND_Y);
-    haze.addColorStop(0, rgba(theme.accent, 0));
-    haze.addColorStop(1, rgba(theme.accent, 0.12));
+    haze.addColorStop(0, theme.day ? 'rgba(255,255,255,0)' : rgba(theme.accent, 0));
+    haze.addColorStop(1, theme.day ? 'rgba(255,255,255,0.25)' : rgba(theme.accent, 0.12));
     ctx.fillStyle = haze;
     ctx.fillRect(0, GROUND_Y - 260, W, 260);
 
-    // quelques étoiles pour Bayonne la nuit
-    if (theme.key === 'bayonne') {
+    // quelques étoiles la nuit (Bayonne, la Rhune)
+    if (theme.key === 'bayonne' || theme.key === 'rhune') {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       // positions pseudo-aléatoires mais fixes (un simple i*k les alignait en diagonales)
       const rnd = (n) => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -2438,15 +2782,24 @@
       }
     }
 
+    if (theme.day) {
+      // grand soleil de midi avec son halo
+      const sun = ctx.createRadialGradient(W - 60, H * 0.12, 10, W - 60, H * 0.12, 90);
+      sun.addColorStop(0, 'rgba(255,248,200,0.9)');
+      sun.addColorStop(1, 'rgba(255,248,200,0)');
+      ctx.fillStyle = sun;
+      ctx.fillRect(W - 150, H * 0.12 - 90, 180, 180);
+    }
     ctx.fillStyle = theme.sun;
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = theme.day ? 1 : 0.85;
     ctx.beginPath();
     ctx.arc(W - 55, H * 0.13, 24, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    // ville en couches : loin → (mer à Biarritz) → façades → monuments → mobilier urbain
+    // ville en couches : (nuages) → loin → (mer à Biarritz) → façades → monuments → mobilier urbain
     const city = cityLayers(theme);
+    if (city.clouds) drawLayer(city.clouds);
     drawLayer(city.far);
     // brume d'éloignement : le lointain se fond dans le ciel
     const mist = ctx.createLinearGradient(0, GROUND_Y - 320, 0, GROUND_Y);
@@ -2466,7 +2819,7 @@
       ctx.translate(0, GROUND_Y);
       ctx.scale(1, 1.45);
       ctx.translate(0, -GROUND_Y);
-      theme.draw(x, ((i % 12) + 12) % 12, theme.silhouette, theme.accent);
+      if (theme.draw) theme.draw(x, ((i % 12) + 12) % 12, theme.silhouette, theme.accent);
       ctx.restore();
     }
     drawLayer(city.near);
@@ -2490,26 +2843,27 @@
         drawTile(ch, x, y, c, r, theme);
       }
     }
-    // rails et poubelles dessinés par-dessus (ils s'étendent sur plusieurs tuiles)
+    // rails et tonneaux dessinés par-dessus (ils s'étendent sur plusieurs tuiles)
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         if (c < 0 || c >= level.cols) continue;
         const ch = level.grid[r][c];
         if (ch === 'R' && tileAt(c - 1, r) !== 'R') drawRail(c, r);
-        if (ch === 'T') drawBin(c, r);
+        if (ch === 'T') drawBarrel(c, r);
       }
     }
   }
 
   function drawTile(ch, x, y, c, r, theme) {
     if (ch === '#') {
-      ctx.fillStyle = '#0d0616';
+      const gr = groundOf(theme);
+      ctx.fillStyle = gr.body;
       ctx.fillRect(x, y, T, T);
       if (r > 0 && tileAt(c, r - 1) !== '#') {
         // trottoir : dalles, bordure lumineuse, marquage au sol en contrebas
-        ctx.fillStyle = '#1d1330';
+        ctx.fillStyle = gr.top;
         ctx.fillRect(x, y + 2, T, 11);
-        ctx.fillStyle = '#0d0616';
+        ctx.fillStyle = gr.joint;
         ctx.fillRect(x + 14, y + 2, 1, 11);
         ctx.fillStyle = 'rgba(255,255,255,0.05)';
         ctx.fillRect(x, y + 2, T, 1);
@@ -2612,42 +2966,74 @@
     ctx.restore();
   }
 
-  // les "tuyaux" de Mario deviennent des poubelles vertes (Trash GO !)
-  function drawBin(c, r) {
+  // les "tuyaux" de Mario deviennent des tonneaux de cidrerie (kupela) : douelles de bois,
+  // cerclages de fer, et un robinet d'où goutte le cidre… Txotx !
+  function drawBarrel(c, r) {
     let h = 1;
     while (tileAt(c, r + h) === 'p') h++;
-    const x = c * T, y = rowY(r), bodyTop = y + 12, bodyH = h * T - 12;
-    ctx.fillStyle = '#237040';
-    ctx.fillRect(x + 2, bodyTop, 2 * T - 4, bodyH);
-    ctx.fillStyle = '#1a5530';
-    for (let k = 1; k < 5; k++) ctx.fillRect(x + 2 + k * 11, bodyTop + 4, 3, bodyH - 8);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(x + 5, bodyTop, 4, bodyH);
-    // couvercle
-    ctx.fillStyle = '#3fae63';
-    ctx.fillRect(x - 3, y, 2 * T + 6, 12);
-    ctx.fillStyle = '#2f8f4e';
-    ctx.fillRect(x - 3, y + 9, 2 * T + 6, 3);
-    ctx.fillStyle = '#1a5530';
-    ctx.fillRect(x + T - 8, y - 4, 16, 4);
-    // liseré néon comme le reste du jeu
-    ctx.strokeStyle = 'rgba(127,255,212,0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x - 3, y, 2 * T + 6, 12);
-    ctx.strokeRect(x + 2, bodyTop, 2 * T - 4, bodyH);
-    // pictogramme recyclage (trois flèches en triangle)
-    if (bodyH > 30) {
-      const cx = x + T, cy = bodyTop + Math.min(bodyH / 2, 26);
-      ctx.strokeStyle = '#7fffd4';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 7, cy + 5); ctx.lineTo(cx - 7, cy + 5); ctx.closePath();
-      ctx.stroke();
+    const x = c * T, y = rowY(r), w = 2 * T, hh = h * T;
+    const bulge = Math.min(6, 2 + h);
+    // corps renflé
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y + 4);
+    ctx.quadraticCurveTo(x - bulge, y + hh / 2, x + 2, y + hh);
+    ctx.lineTo(x + w - 2, y + hh);
+    ctx.quadraticCurveTo(x + w + bulge, y + hh / 2, x + w - 2, y + 4);
+    ctx.closePath();
+    const wood = ctx.createLinearGradient(x - bulge, 0, x + w + bulge, 0);
+    wood.addColorStop(0, '#5e3818');
+    wood.addColorStop(0.35, '#a0662f');
+    wood.addColorStop(0.55, '#b87a3c');
+    wood.addColorStop(1, '#5e3818');
+    ctx.fillStyle = wood;
+    ctx.fill();
+    ctx.clip();
+    // douelles
+    ctx.strokeStyle = 'rgba(40,20,5,0.45)';
+    ctx.lineWidth = 1;
+    for (let k = 1; k < 6; k++) {
+      const sx = x + (w / 6) * k;
+      ctx.beginPath(); ctx.moveTo(sx, y); ctx.quadraticCurveTo(sx + (sx - (x + w / 2)) * 0.12, y + hh / 2, sx, y + hh); ctx.stroke();
+    }
+    ctx.restore();
+    // cerclages de fer
+    const hoops = h <= 2 ? [0.12, 0.88] : [0.08, 0.3, 0.7, 0.92];
+    for (const f of hoops) {
+      const hy = y + 4 + (hh - 4) * f;
+      const edge = Math.sin(f * Math.PI) * bulge;
+      ctx.fillStyle = '#2e2e33';
+      ctx.fillRect(x + 1 - edge, hy - 2.5, w - 2 + edge * 2, 5);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(x + 1 - edge, hy - 2.5, w - 2 + edge * 2, 1);
+    }
+    // couvercle (fond du tonneau vu du dessus)
+    ctx.fillStyle = '#7a4a22';
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y + 4, w / 2 - 2, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2e2e33'; ctx.lineWidth = 1.5; ctx.stroke();
+    // inscription et robinet
+    if (h >= 3) {
+      ctx.font = 'bold 7px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(245,230,200,0.85)';
+      ctx.fillText('SAGARDOA', x + w / 2, y + hh * 0.52);
+      ctx.textAlign = 'left';
+    }
+    const tapY = y + hh - 16;
+    ctx.fillStyle = '#c9a15a';
+    ctx.fillRect(x + w / 2 - 3, tapY, 6, 4);
+    ctx.fillRect(x + w / 2 - 1, tapY + 4, 2, 3);
+    // goutte de cidre qui tombe de temps en temps
+    const drip = (frame + c * 37) % 90;
+    if (drip < 30) {
+      ctx.fillStyle = '#f2c14e';
+      ctx.beginPath(); ctx.arc(x + w / 2, tapY + 8 + drip * 0.3, 1.6, 0, Math.PI * 2); ctx.fill();
     }
   }
 
   // mât d'arrivée avec drapeau au lauburu
   function drawFlag() {
+    if (level.def.boss) return;
     const px = level.def.flag * T + T / 2;
     const top = rowY(GROUND_ROW - 10);
     const bottom = GROUND_Y - T;
@@ -2676,6 +3062,7 @@
 
   // fronton de pelote basque en guise de "château" de fin
   function drawFronton() {
+    if (level.def.boss) return;
     const x = (level.def.flag + 5) * T;
     if (x > camX + W + 20 || x + 160 < camX) return;
     const base = GROUND_Y, w = 130, h = 150;
@@ -2707,6 +3094,139 @@
     ctx.beginPath();
     ctx.arc(x + 60, base - 44, 18, Math.PI, 0);
     ctx.fill();
+  }
+
+  // Tartalo : géant à un œil, béret (txapela), gilet en peau de mouton, ceinture
+  // rouge, espadrilles, et son makila (bâton basque) à la main
+  function drawBoss() {
+    const b = boss;
+    if (!b || b.state === 'gone') return;
+    if (b.flash > 0 && Math.floor(b.flash / 4) % 2 === 0) return;
+    // ombre au sol
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    const shadowW = b.state === 'air' ? 18 : 30;
+    ctx.beginPath(); ctx.ellipse(b.x + b.w / 2, GROUND_Y - 1, shadowW, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(b.x + b.w / 2, b.y + b.h);
+    if (b.state === 'down') ctx.rotate(-b.rot * b.facing);
+    const squash = b.state === 'crouch' ? 1 - Math.min(b.t, 12) / 60 : 1;
+    ctx.scale(b.facing, squash);
+    const skin = '#d9a27a', vest = '#ece6d8';
+    const step = b.state === 'walk' ? Math.sin(b.t * 0.25) * 4 : 0;
+    // jambes (pantalon bleu basque) et espadrilles
+    ctx.fillStyle = '#2b3a5a';
+    ctx.fillRect(-18 + step, -30, 13, 26); ctx.fillRect(5 - step, -30, 13, 26);
+    ctx.fillStyle = '#efe9dc';
+    ctx.fillRect(-21 + step, -6, 18, 6); ctx.fillRect(3 - step, -6, 18, 6);
+    ctx.fillStyle = '#c8102e';
+    ctx.fillRect(-15 + step, -5, 8, 1.5); ctx.fillRect(9 - step, -5, 8, 1.5);
+    // corps : chemise rouge, gilet en peau de mouton, ceinture rouge
+    ctx.fillStyle = '#b8322a';
+    ctx.fillRect(-24, -66, 48, 38);
+    ctx.fillStyle = vest;
+    ctx.fillRect(-26, -66, 16, 36); ctx.fillRect(10, -66, 16, 36);
+    for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.arc(-18, -64 + k * 6, 4, 0, Math.PI * 2); ctx.arc(18, -64 + k * 6, 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#c8102e';
+    ctx.fillRect(-25, -34, 50, 6);
+    // bras et makila
+    const raise = b.state === 'throw' && b.t < 30;
+    ctx.fillStyle = skin;
+    if (raise) {
+      ctx.fillRect(14, -92, 10, 30);
+      ctx.fillStyle = '#8a8580';
+      ctx.beginPath(); ctx.arc(19, -96, 11, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillRect(22, -62, 9, 28);
+    }
+    ctx.fillStyle = skin;
+    ctx.fillRect(-31, -62, 9, 28);
+    ctx.fillStyle = '#7a5230';
+    ctx.fillRect(-30, -78, 4, 76);
+    ctx.fillStyle = '#cfd8ff';
+    ctx.fillRect(-31, -82, 6, 6);
+    // tête : grosse tête ronde, barbe, UN SEUL ŒIL
+    ctx.fillStyle = skin;
+    ctx.beginPath(); ctx.arc(0, -82, 19, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a3b25';
+    ctx.beginPath(); ctx.moveTo(-16, -78); ctx.quadraticCurveTo(0, -52, 16, -78); ctx.lineTo(10, -72); ctx.quadraticCurveTo(0, -66, -10, -72); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#1a0f0a'; ctx.fillRect(-6, -71, 12, 2.5);
+    if (b.state === 'stunned' || b.state === 'down') {
+      // œil fermé (sonné)
+      ctx.strokeStyle = '#1a0f0a'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(-9, -86); ctx.quadraticCurveTo(0, -80, 9, -86); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.ellipse(1, -86, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      const charging = b.state === 'crouch';
+      ctx.shadowColor = charging ? '#ffd400' : '#ff2fa0'; ctx.shadowBlur = charging ? 18 + Math.sin(frame) * 6 : 10;
+      ctx.fillStyle = charging ? '#ffd400' : '#ff2fa0';
+      ctx.beginPath(); ctx.arc(4, -86, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#0d0d12';
+      ctx.beginPath(); ctx.arc(5, -86, 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3a2416';
+      ctx.fillRect(-11, -97, 24, 3.5);
+    }
+    // txapela (béret basque) et sa petite queue
+    ctx.fillStyle = '#141414';
+    ctx.beginPath(); ctx.ellipse(0, -99, 22, 7, -0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(-1, -109, 3, 5);
+    ctx.restore();
+    // étoiles qui tournent autour de la tête quand il est sonné : le moment d'attaquer !
+    if (b.state === 'stunned') {
+      for (let i = 0; i < 3; i++) {
+        const a = frame * 0.12 + i * (Math.PI * 2 / 3);
+        const sx = b.x + b.w / 2 + Math.cos(a) * 24, sy = b.y - 16 + Math.sin(a) * 6;
+        ctx.fillStyle = '#ffd400';
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(frame * 0.2);
+        ctx.fillRect(-4, -1.2, 8, 2.4); ctx.fillRect(-1.2, -4, 2.4, 8);
+        ctx.restore();
+      }
+    }
+    // rochers et ondes de choc
+    for (const r of bossRocks) {
+      ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.rot);
+      ctx.fillStyle = '#8a8580'; ctx.beginPath(); ctx.arc(0, 0, r.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#6b6661'; ctx.beginPath(); ctx.arc(-3, -2, 3.5, 0, Math.PI * 2); ctx.arc(4, 3, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#4e4a46'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-6, 5); ctx.lineTo(2, -1); ctx.lineTo(6, -6); ctx.stroke();
+      ctx.restore();
+    }
+    for (const w of shockwaves) {
+      const a = Math.min(1, w.life / 20);
+      ctx.fillStyle = 'rgba(255,216,168,' + (0.85 * a) + ')';
+      ctx.beginPath(); ctx.ellipse(w.x, GROUND_Y, 11, 15, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = 'rgba(255,47,160,' + (0.5 * a) + ')';
+      ctx.fillRect(w.x - w.dir * 22, GROUND_Y - 4, 18, 3);
+    }
+  }
+
+  // barre de vie du boss, sous le HUD
+  function drawBossBar() {
+    if (!boss || boss.state === 'gone') return;
+    const y = 96;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 13px "Courier New", monospace';
+    ctx.shadowColor = 'rgba(255,47,160,0.9)'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ff2fa0';
+    ctx.fillText('TARTALO', W / 2, y);
+    ctx.restore();
+    for (let i = 0; i < 3; i++) {
+      const hx = W / 2 - 24 + i * 24, hy = y + 12;
+      const full = i < boss.hp;
+      ctx.fillStyle = full ? '#ff2fa0' : 'rgba(255,255,255,0.18)';
+      ctx.beginPath();
+      ctx.arc(hx - 4, hy, 5, Math.PI, 0); ctx.arc(hx + 4, hy, 5, Math.PI, 0);
+      ctx.lineTo(hx, hy + 10); ctx.closePath(); ctx.fill();
+    }
+    if (boss.state === 'stunned') {
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 11px "Courier New", monospace';
+      ctx.fillStyle = '#ffd400';
+      ctx.fillText('SAUTE-LUI SUR LA TÊTE !', W / 2, y + 36);
+      ctx.textAlign = 'left';
+    }
   }
 
   function drawFlames() {
@@ -2849,12 +3369,16 @@
     ctx.fill();
     // corps
     ctx.fillStyle = '#f5f0e6';
+    ctx.strokeStyle = 'rgba(20,32,50,0.55)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.ellipse(0, 1, 11, 5.5, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.beginPath();
     ctx.arc(-9, -2, 4.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     // bout des ailes et queue grises
     ctx.fillStyle = '#6b7280';
     ctx.fillRect(9, -1, 5, 3);
@@ -3029,9 +3553,9 @@
       ctx.save();
       ctx.translate(d.x, d.y);
       ctx.rotate(d.rot);
-      ctx.fillStyle = '#2a1540';
+      ctx.fillStyle = d.rock ? '#8a8580' : '#2a1540';
       ctx.fillRect(-6, -6, 12, 12);
-      ctx.strokeStyle = level.theme.accent;
+      ctx.strokeStyle = d.rock ? '#6b6661' : level.theme.accent;
       ctx.lineWidth = 1.5;
       ctx.strokeRect(-6, -6, 12, 12);
       ctx.restore();
@@ -3051,7 +3575,9 @@
   function drawWorld() {
     drawBackground();
     ctx.save();
-    ctx.translate(-Math.round(camX), 0);
+    // tremblement de l'écran quand Tartalo retombe
+    const sk = shake > 0 ? (Math.random() - 0.5) * Math.min(shake, 10) : 0;
+    ctx.translate(-Math.round(camX) + sk, sk * 0.5);
     drawFronton();
     drawFlag();
     drawTiles();
@@ -3062,9 +3588,18 @@
       if (!e.active) continue;
       if (e.type === 'cone') drawCone(e); else drawGull(e);
     }
+    if (boss) drawBoss();
     drawPlayer();
     drawEffects();
     ctx.restore();
+    if (level.theme.day) {
+      const band = ctx.createLinearGradient(0, 0, 0, 84);
+      band.addColorStop(0, 'rgba(13,13,18,0.55)');
+      band.addColorStop(1, 'rgba(13,13,18,0)');
+      ctx.fillStyle = band;
+      ctx.fillRect(0, 0, W, 84);
+    }
+    if (boss) drawBossBar();
     drawUnderground();
     drawCityLabel();
   }
@@ -3096,7 +3631,7 @@
     for (let c = c0; c <= c1; c++) {
       const x = Math.round(c * T - camX);
       const full = c < 0 || c >= level.cols || tileAt(c, ROWS - 1) === '#';
-      ctx.fillStyle = full ? '#0d0616' : pit;
+      ctx.fillStyle = full ? groundOf(theme).under : pit;
       ctx.fillRect(x, H, T, extra);
       if (!full) continue;
       // fines jointures de dalles souterraines
@@ -3128,7 +3663,11 @@
     ctx.font = 'bold 20px "Courier New", monospace';
     ctx.fillStyle = '#ffd400';
     ctx.fillText('× ' + lives, W / 2 + 18, H * 0.5 + 30);
-    if (levelIndex >= LEVELS.length) {
+    if (level.def.boss) {
+      ctx.font = 'bold 13px "Courier New", monospace';
+      ctx.fillStyle = '#ff2fa0';
+      ctx.fillText("TARTALO t'attend…", W / 2, H * 0.66);
+    } else if (levelIndex >= LEVELS.length) {
       ctx.font = '12px "Courier New", monospace';
       ctx.fillStyle = '#cfd8ff';
       ctx.fillText('Ça accélère !', W / 2, H * 0.66);
@@ -3385,10 +3924,13 @@
       player() { return player; },
       enemies() { return enemies; },
       coins() { return coins; },
+      boss() { return boss; },
+      bossRocks() { return bossRocks; },
+      shockwaves() { return shockwaves; },
       flames() { return flames.map((f) => Object.assign({ c: f.c }, flameState(f))); },
       flameCycle: { period: 200, on: 70 },
       grid() { return level.grid.map((r) => r.join('')); },
-      def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length }; },
+      def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length, boss: !!level.def.boss }; },
       setPaused, isPaused: () => paused,
       setCoins(n) { coinCount = n; },
       consts: { T, ROWS, LEVEL_Y, GROUND_ROW, GROUND_Y }
