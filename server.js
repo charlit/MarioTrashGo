@@ -20,7 +20,15 @@ const MAX_VISITS = 300;
 const MAX_SCORE_VALUE = 5000000;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// La page du jeu doit être revérifiée à chaque visite : sans ça, les téléphones
+// (Safari surtout, et l'icône "écran d'accueil") gardent l'ancienne version en cache
+// après une mise à jour. "no-cache" = on garde la copie mais on demande au serveur
+// si elle a changé (réponse 304 légère si ce n'est pas le cas).
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 
 // ---- petits utilitaires de stockage (fichiers JSON, comme Netlify Blobs) ----
 function ensureDataDir() {
