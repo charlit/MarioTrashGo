@@ -140,7 +140,8 @@
     check('trou', dying && g.info().lives === 2 && g.info().state === 'playing', 'dying=' + dying + ', vies ' + g.info().lives + ', état ' + g.info().state);
   });
 
-  // 10. Drapeau : fin de niveau, bonus de temps, passage au niveau suivant (pour chaque niveau)
+  // 10. Drapeau : fin de niveau, bonus de temps, passage au niveau suivant (pour chaque niveau).
+  //     Après Biarritz (bonusBasket), on passe d'abord par le mini-jeu du panier.
   safe('drapeau', () => {
     g.start(0);
     const n = g.def().levels;
@@ -159,9 +160,10 @@
       const score0 = g.info().score;
       g.run(700);
       const inf = g.info();
-      out.push({ niveau: i + 1, cleared, bonus: inf.score - score0, suivant: inf.levelIndex });
+      out.push({ niveau: i + 1, cleared, bonus: inf.score - score0, suivant: inf.levelIndex, etat: inf.state, panier: d.bonusBasket });
     }
-    check('drapeau', out.length > 0 && out.every((o) => o.cleared && o.bonus > 0 && o.suivant === o.niveau), JSON.stringify(out));
+    const suiteOk = (o) => o.panier ? (o.etat === 'basket' && o.suivant === o.niveau - 1) : o.suivant === o.niveau;
+    check('drapeau', out.length > 0 && out.every((o) => o.cleared && o.bonus > 0 && suiteOk(o)), JSON.stringify(out));
   });
 
   // 11. Figures automatiques : un grand saut finit sa figure (points), un petit saut
@@ -583,6 +585,59 @@
     const avg = (a) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0;
     const detail = { vus: seen, pointsMoyens: { fifty: avg(pts.fifty), nose: avg(pts.nose) }, styleResteApres: leftover };
     check('grind 50-50 / nosegrind', seen.fifty > 0 && seen.nose > 0 && avg(pts.fifty) > 0 && avg(pts.nose) > avg(pts.fifty) && !leftover, JSON.stringify(detail));
+  });
+
+  // 26. Mini-jeu du panier (entre Biarritz et Anglet) : 10 ballons, 3 paniers pour passer.
+  //     Un bon geste marque, un geste trop court rate ; 3 paniers → Anglet ; échec → -1 vie et on
+  //     recommence ; échec avec la dernière vie → game over. La manette est masquée pendant l'épreuve,
+  //     et le vrai geste au doigt (PointerEvent) lance bien le ballon.
+  safe('panier de basket', () => {
+    const problems = [];
+    const shootWait = (dx, dy) => {
+      g.shoot(dx, dy);
+      for (let i = 0; i < 400 && g.basket() && g.basket().phase !== 'aim' && g.basket().phase !== 'end'; i++) g.run(1);
+    };
+    const res = {};
+    // bon geste / geste trop court
+    g.start(0); g.beginBasket(); g.run(101);
+    if (g.basket().phase !== 'aim') problems.push("pas prêt à tirer après l'intro");
+    if (getComputedStyle(document.getElementById('pad')).visibility !== 'hidden') problems.push('manette visible pendant le panier');
+    shootWait(0, 225); res.bon = g.basket().results[0];
+    shootWait(0, 120); res.court = g.basket().results[1];
+    if (res.bon === 'miss') problems.push('le geste idéal rate');
+    if (res.court !== 'miss') problems.push('un geste trop court marque');
+    // vrai geste tactile
+    g.start(0); g.beginBasket(); g.run(101);
+    const c = document.getElementById('game'), r = c.getBoundingClientRect();
+    if (r.height) {
+      const k = c.height / r.height, x = r.left + r.width / 2, y0 = r.top + r.height * 0.85, y1 = y0 - 225 / k;
+      const ev = (t, yy) => new PointerEvent(t, { bubbles: true, cancelable: true, pointerId: 77, pointerType: 'touch', clientX: x, clientY: yy });
+      c.dispatchEvent(ev('pointerdown', y0)); window.dispatchEvent(ev('pointermove', (y0 + y1) / 2)); window.dispatchEvent(ev('pointerup', y1));
+      res.geste = g.basket().phase;
+      if (res.geste !== 'fly') problems.push('le glissé au doigt ne lance pas le ballon');
+    } else problems.push('page sans taille : fais resize_window mobile');
+    // réussite : 3 paniers → Anglet
+    g.start(0); g.beginBasket(); g.run(101);
+    for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, s < 3 ? 225 : 120);
+    g.run(200);
+    res.reussite = { niveau: g.info().levelIndex, etat: g.info().state, vies: g.info().lives };
+    if (g.info().levelIndex !== 1 || g.info().lives !== 3) problems.push('3 paniers ne mènent pas à Anglet');
+    if (getComputedStyle(document.getElementById('pad')).visibility === 'hidden') problems.push('manette toujours masquée après le panier');
+    // échec : -1 vie et on recommence ; fin anticipée quand 3 paniers deviennent impossibles
+    g.start(0); g.beginBasket(); g.run(101);
+    for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
+    res.tirsAvantFin = g.basket().shot;
+    g.run(200);
+    res.echec = { vies: g.info().lives, etat: g.info().state, niveau: g.info().levelIndex };
+    if (g.info().lives !== 2 || g.info().state !== 'basket' || g.basket().shot !== 0) problems.push("un échec ne coûte pas une vie / ne relance pas l'épreuve");
+    // échec avec la dernière vie → game over
+    g.start(0); g.beginBasket(); g.run(101);
+    while (g.info().lives > 1) { for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, 120); g.run(200); g.run(101); }
+    for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
+    g.run(200);
+    res.derniereVie = g.info().state;
+    if (g.info().state !== 'over') problems.push('échec sans vie restante : pas de game over');
+    check('panier de basket', problems.length === 0, problems.length ? problems.join(' ; ') + ' ' + JSON.stringify(res) : JSON.stringify(res));
   });
 
   g.start(0);

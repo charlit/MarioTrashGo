@@ -7,6 +7,9 @@ horizontal façon Super Mario.
 
 ## Le jeu
 
+- **Mini-jeu du panier** entre Biarritz et Anglet : un panier de basket accroché à un fronton,
+  10 ballons, il faut en marquer 3 pour continuer (sinon -1 vie et on recommence). On lance en
+  glissant le doigt (ou la souris) vers le haut : la longueur du geste règle la force, son inclinaison la direction.
 - **3 niveaux + un boss** : 1-1 Biarritz (de jour : Grande Plage, Rocher de la Vierge,
   Hôtel du Palais, crampottes), 1-2 Anglet (skatepark de plage), 1-3 Bayonne (de nuit),
   puis 1-4 **La Rhune** : le boss **Tartalo**, cyclope géant de la mythologie basque

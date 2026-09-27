@@ -389,6 +389,8 @@
     box-shadow: 0 18px 30px -8px rgba(255, 47, 160, 0.4);
   }
   @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
+  /* mini-jeu du panier : on lance au doigt n'importe où, la manette s'efface */
+  html.basket-mode #pad { visibility: hidden; }
   /* manette posée sur le sous-sol dessiné par le jeu (zone sous le trottoir) */
   html.pad-in-game canvas { border-bottom: 4px solid #ff2fa0; border-radius: 22px; }
   html.pad-in-game #pad {
@@ -816,6 +818,8 @@
     function flagSfx()  { seq([392, 523, 659, 784, 1047, 784, 1047, 1319], 0.09, 'square', 0.22); }
     function flameSfx() { noiseHit(0.35, 700, 0.22); sweep('sawtooth', 90, 60, 0.3, 0.08); }
     function tickSfx()  { tone(1568, 0.03, 'square', sfxGain, ctx ? ctx.currentTime : 0, 0.08); }
+    function swishSfx() { noiseHit(0.12, 3200, 0.12); seq([784, 1047, 1568], 0.07, 'triangle', 0.3); }
+    function rimSfx()   { sweep('square', 420, 260, 0.08, 0.22); }
 
     function crashSfx() {
       if (!ensureCtx() || muted) return;
@@ -857,7 +861,7 @@
     function isMuted() { return muted; }
 
     return { resume, startMusic, stopMusic, jumpSfx, coinSfx, stompSfx, bumpSfx, breakSfx, powerSfx, sproutSfx,
-             oneUpSfx, hurtSfx, trickSfx, flagSfx, tickSfx, flameSfx, crashSfx, startGrindSfx, stopGrindSfx, setMuted, isMuted };
+             oneUpSfx, hurtSfx, trickSfx, flagSfx, tickSfx, swishSfx, rimSfx, flameSfx, crashSfx, startGrindSfx, stopGrindSfx, setMuted, isMuted };
   })();
 
   const canvas = document.getElementById('game');
@@ -1030,8 +1034,8 @@
   // Chaque niveau est construit avec un petit "éditeur" (plus lisible et moins
   // fragile qu'une grande carte ASCII). h = hauteur en tuiles au-dessus du sol.
   const LEVELS = [
-    { // 1-1 BIARRITZ : découverte
-      cols: 180, checkpoint: 90, flag: 166,
+    { // 1-1 BIARRITZ : découverte (suivi du mini-jeu du panier de basket)
+      cols: 180, checkpoint: 90, flag: 166, bonusBasket: true,
       build(L) {
         L.ground(0, 68); L.ground(71, 110); L.ground(113, 180);
         L.row(14, 4, '?');
@@ -1160,7 +1164,7 @@
   try { best = parseInt(localStorage.getItem('trashgo_world_best') || '0', 10) || 0; } catch (e) { best = 0; }
   bestEl.textContent = 'BEST ' + best;
 
-  let state = 'ready'; // ready | intro | playing | dying | clear | over
+  let state = 'ready'; // ready | intro | playing | dying | clear | basket | over | won
   let stateTimer = 0;
   let score = 0, coinCount = 0, lives = 3;
   let levelIndex = 0;
@@ -1301,6 +1305,7 @@
   }
 
   function beginIntro() {
+    setBasketMode(false);
     state = 'intro';
     stateTimer = 150;
     Audio2.stopMusic();
@@ -1448,6 +1453,7 @@
   }
 
   function gameOver() {
+    setBasketMode(false);
     state = 'over';
     endLock = 60;
     Audio2.stopMusic();
@@ -2042,6 +2048,8 @@
       if (--stateTimer <= 0) {
         // le boss de fin est vaincu : le jeu est terminé
         if (level.def.boss) { gameWon(); return; }
+        // après Biarritz : mini-jeu du panier avant de passer à Anglet
+        if (level.def.bonusBasket) { beginBasket(); return; }
         levelIndex++;
         checkpointReached = false;
         beginIntro();
@@ -3826,7 +3834,8 @@
     if (hud.textContent !== s) hud.textContent = s;
     const c = '⚡×' + String(coinCount).padStart(2, '0');
     if (coinsEl.textContent !== c) coinsEl.textContent = c;
-    const w = level ? worldLabel() + ' <span class="city">' + level.theme.name + '</span>' : '';
+    const w = state === 'basket' ? 'BONUS <span class="city">PANIER</span>'
+      : level ? worldLabel() + ' <span class="city">' + level.theme.name + '</span>' : '';
     if (worldEl._html !== w) { worldEl.innerHTML = w; worldEl._html = w; }
     const t = '⏱' + timeLeft;
     if (timeEl.textContent !== t) timeEl.textContent = t;
@@ -3834,6 +3843,507 @@
     const l = '♥×' + lives;
     if (livesEl.textContent !== l) livesEl.textContent = l;
   }
+
+  // ================================================================
+  //  MINI-JEU : PANIER DE BASKET (entre Biarritz et Anglet)
+  //  10 ballons, il faut en mettre au moins 3 pour passer à Anglet ;
+  //  sinon on perd une vie et on recommence. On lance en glissant le doigt
+  //  (ou la souris) vers le haut : la longueur du geste donne la force,
+  //  son inclinaison la direction.
+  // ================================================================
+  // Monde en 3D simple : x latéral, y hauteur, z profondeur (distance à la caméra),
+  // projeté en perspective. Le panier est accroché devant un fronton basque.
+  const BK = {
+    BALLS: 10, NEED: 3,
+    F: 600, CAM_H: 343, HOR: 276,     // focale, hauteur de caméra, ligne d'horizon (px)
+    G: 0.6, FLIGHT: 55,               // gravité, durée du vol jusqu'au cercle (images)
+    X0: 0, Y0: 40, Z0: 40,            // ballon au repos, dans les mains
+    HY: 440, HZ: 440, RIM: 38,        // cercle : hauteur, profondeur, rayon
+    BALL: 18,                         // rayon du ballon
+    WALL: 560,                        // mur du fronton
+    POWER0: 0.35, POWER_GAIN: 520,    // geste de 35 % de l'écran = pile au cercle
+    AIM_GAIN: 230,                    // inclinaison du geste → décalage latéral
+    PTS: 500, SWISH_PTS: 750
+  };
+  BK.BZ = BK.HZ + BK.RIM + 10;        // panneau, juste derrière le cercle
+
+  let basket = null;
+
+  function setBasketMode(on) {
+    document.documentElement.classList.toggle('basket-mode', on);
+    if (on) {
+      keys.left = keys.right = keys.jump = keys.trick = false;
+      document.querySelectorAll('#pad .on').forEach((el) => el.classList.remove('on'));
+    }
+  }
+
+  function beginBasket(retry) {
+    state = 'basket';
+    setBasketMode(true);
+    particles = []; floatingTexts = [];
+    basket = {
+      phase: 'intro', t: 0,
+      shot: 0, made: 0, results: [],   // results : 'swish' | 'in' | 'miss'
+      ball: null, drag: null, net: 0, msg: null, retry: !!retry, passed: false
+    };
+    resetBasketBall();
+    Audio2.startMusic(levelIndex);
+  }
+
+  function resetBasketBall() {
+    basket.ball = { x: BK.X0, y: BK.Y0, z: BK.Z0, vx: 0, vy: 0, vz: 0, flying: false, t: 0,
+      scored: false, touched: false, bounces: 0, spin: 0 };
+  }
+
+  // tir à partir d'un geste (en pixels du canvas) : dx vers la droite, dy vers le haut
+  function basketShoot(dx, dy) {
+    if (!basket || basket.phase !== 'aim' || dy < 20) return false;
+    const power = dy / H;
+    const zT = BK.HZ + (power - BK.POWER0) * BK.POWER_GAIN;
+    const xT = Math.max(-240, Math.min(240, (dx / dy) * BK.AIM_GAIN));
+    const b = basket.ball, tf = BK.FLIGHT;
+    // trajectoire qui passe par (xT, HY, zT) en descendant, au bout de FLIGHT images
+    b.vx = (xT - b.x) / tf;
+    b.vz = (Math.max(BK.Z0 + 60, zT) - b.z) / tf;
+    b.vy = (BK.HY - b.y + 0.5 * BK.G * tf * tf) / tf;
+    b.flying = true; b.t = 0;
+    basket.phase = 'fly';
+    Audio2.jumpSfx();
+    return true;
+  }
+
+  function stepBasketBall(b, k) {
+    const px = b.x, py = b.y, pz = b.z;
+    b.vy -= BK.G * k;
+    b.x += b.vx * k; b.y += b.vy * k; b.z += b.vz * k;
+    // cercle : tore de rayon RIM, on repousse le ballon hors du métal
+    const hx = b.x, hz = b.z - BK.HZ;
+    const hd = Math.hypot(hx, hz) || 0.001;
+    const qx = hx / hd * BK.RIM, qz = BK.HZ + hz / hd * BK.RIM;
+    const nx = b.x - qx, ny = b.y - BK.HY, nz = b.z - qz;
+    const nd = Math.hypot(nx, ny, nz);
+    const minD = BK.BALL + 2;
+    if (nd < minD && nd > 0.001) {
+      const ux = nx / nd, uy = ny / nd, uz = nz / nd;
+      const vn = b.vx * ux + b.vy * uy + b.vz * uz;
+      if (vn < 0) {
+        b.vx -= 1.7 * vn * ux; b.vy -= 1.7 * vn * uy; b.vz -= 1.7 * vn * uz;
+        if (!b.touched || Math.abs(vn) > 2) Audio2.rimSfx();
+        b.touched = true;
+      }
+      b.x = qx + ux * minD; b.y = BK.HY + uy * minD; b.z = qz + uz * minD;
+    }
+    // panneau
+    if (b.z + BK.BALL > BK.BZ && pz + BK.BALL <= BK.BZ && Math.abs(b.x) < 80 + BK.BALL * 0.5 &&
+        b.y > BK.HY - 20 && b.y < BK.HY + 120) {
+      b.z = BK.BZ - BK.BALL; b.vz = -Math.abs(b.vz) * 0.8; b.vx *= 0.9;
+      b.touched = true;
+      Audio2.bumpSfx();
+    }
+    // mur du fronton
+    if (b.z + BK.BALL > BK.WALL) { b.z = BK.WALL - BK.BALL; b.vz = -Math.abs(b.vz) * 0.5; }
+    // panier : le centre du ballon traverse le cercle en descendant, par l'intérieur
+    if (!b.scored && py > BK.HY && b.y <= BK.HY && Math.hypot(b.x, b.z - BK.HZ) < BK.RIM - 4) {
+      b.scored = true;
+      basketScored(b);
+    }
+    // sol
+    if (b.y < BK.BALL) {
+      b.y = BK.BALL;
+      if (b.vy < 0) { b.vy = -b.vy * 0.55; b.vx *= 0.8; b.vz *= 0.8; b.bounces++; if (b.bounces < 3) Audio2.bumpSfx(); }
+    }
+  }
+
+  function basketScored(b) {
+    const swish = !b.touched;
+    basket.made++;
+    basket.results.push(swish ? 'swish' : 'in');
+    basket.net = 30;
+    const pts = swish ? BK.SWISH_PTS : BK.PTS;
+    score += pts;
+    basket.msg = { txt: (swish ? 'SWISH ! +' : 'PANIER ! +') + pts, color: swish ? '#7fffd4' : '#ffd400', t: 70 };
+    Audio2.swishSfx();
+    buzz(30);
+    const c = bkProj(0, BK.HY, BK.HZ);
+    for (let i = 0; i < 18; i++) {
+      const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 2.2;
+      particles.push({ x: c.x, y: c.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1, life: 20 + Math.floor(Math.random() * 14),
+        color: ['#ff2fa0', '#7fffd4', '#ffd400'][i % 3] });
+    }
+    if (basket.made === BK.NEED) showMilestoneBanner('QUALIFIÉ !');
+  }
+
+  function updateBasket() {
+    frame++;
+    const bk = basket;
+    bk.t++;
+    if (bk.net > 0) bk.net--;
+    if (bk.msg && --bk.msg.t <= 0) bk.msg = null;
+    updateParticles();
+    if (bk.phase === 'intro') {
+      if (bk.t > 100) { bk.phase = 'aim'; bk.t = 0; }
+    } else if (bk.phase === 'fly') {
+      const b = bk.ball;
+      b.t++;
+      b.spin += 0.25;
+      stepBasketBall(b, 0.5); stepBasketBall(b, 0.5);
+      const done = b.t > 230 || b.bounces >= 3 || (b.scored && b.t > 45 && b.y < BK.HY - 200) ||
+        (b.bounces >= 1 && !b.scored && b.z < BK.HZ - 120);
+      if (done) {
+        if (!b.scored) {
+          bk.results.push('miss');
+          bk.msg = { txt: 'RATÉ', color: '#ff5566', t: 45 };
+        }
+        bk.shot++;
+        bk.phase = 'next'; bk.t = 0;
+      }
+    } else if (bk.phase === 'next') {
+      if (bk.t > 24) {
+        const left = BK.BALLS - bk.shot;
+        // plus de ballon, ou plus assez pour atteindre 3 paniers : fin de l'épreuve
+        if (left <= 0 || bk.made + left < BK.NEED) {
+          bk.phase = 'end'; bk.t = 0;
+          bk.passed = bk.made >= BK.NEED;
+          Audio2.stopMusic();
+          if (bk.passed) Audio2.flagSfx();
+          else { Audio2.hurtSfx(); buzz([40, 40, 80]); }
+        } else {
+          resetBasketBall();
+          bk.phase = 'aim'; bk.t = 0;
+        }
+      }
+    } else if (bk.phase === 'end') {
+      if (bk.t > 150) {
+        if (bk.passed) {
+          basket = null;
+          levelIndex++;
+          checkpointReached = false;
+          beginIntro();
+        } else {
+          lives--;
+          if (lives <= 0) { basket = null; gameOver(); return; }
+          beginBasket(true);
+        }
+      }
+    }
+  }
+
+  function bkProj(x, y, z) {
+    const s = BK.F / (BK.F + z);
+    return { x: W / 2 + x * s, y: basket.oy + BK.HOR + (BK.CAM_H - y) * s, s };
+  }
+
+  function drawBasket() {
+    const bk = basket;
+    if (!bk) return;
+    // en mode téléphone le canvas est plus haut : la scène descend un peu
+    bk.oy = Math.round((canvas.height - H) * 0.55);
+    const horY = bk.oy + BK.HOR;
+    // ciel de crépuscule
+    const sky = ctx.createLinearGradient(0, 0, 0, horY);
+    sky.addColorStop(0, '#12051f');
+    sky.addColorStop(0.65, '#3b0d4a');
+    sky.addColorStop(1, '#ff5e8a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, horY);
+    for (let i = 0; i < 28; i++) {
+      const sx = (i * 97) % W, sy = (i * 53) % Math.max(40, horY - 90);
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.25 + 0.35 * Math.abs(Math.sin(frame * 0.03 + i))) + ')';
+      ctx.fillRect(sx, sy, 1.5, 1.5);
+    }
+    // silhouettes de la ville à l'horizon, fenêtres néon
+    for (let i = 0; i < 13; i++) {
+      const bw = 26 + (i * 37) % 22, bh = 34 + (i * 61) % 60, bx = i * 32 - 10;
+      ctx.fillStyle = '#1c0a26';
+      ctx.fillRect(bx, horY - bh, bw, bh);
+      for (let wy = horY - bh + 6; wy < horY - 6; wy += 9) {
+        for (let wx = bx + 4; wx < bx + bw - 4; wx += 7) {
+          if ((wx * 7 + wy * 3 + i) % 5 === 0) {
+            ctx.fillStyle = (wx + wy) % 3 ? 'rgba(255,212,0,0.7)' : 'rgba(127,255,212,0.7)';
+            ctx.fillRect(wx, wy, 3, 4);
+          }
+        }
+      }
+    }
+    // sol du terrain
+    const floor = ctx.createLinearGradient(0, horY, 0, canvas.height);
+    floor.addColorStop(0, '#2a0f36');
+    floor.addColorStop(1, '#0d0616');
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horY, W, canvas.height - horY);
+    const line = (x1, z1, x2, z2, col, w) => {
+      const a = bkProj(x1, 0, z1), b = bkProj(x2, 0, z2);
+      ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    };
+    // raquette rose + lignes aqua
+    const k1 = bkProj(-90, 0, 330), k2 = bkProj(90, 0, 330), k3 = bkProj(90, 0, BK.WALL), k4 = bkProj(-90, 0, BK.WALL);
+    ctx.fillStyle = 'rgba(255,47,160,0.28)';
+    ctx.beginPath(); ctx.moveTo(k1.x, k1.y); ctx.lineTo(k2.x, k2.y); ctx.lineTo(k3.x, k3.y); ctx.lineTo(k4.x, k4.y); ctx.closePath(); ctx.fill();
+    ctx.save();
+    ctx.shadowColor = 'rgba(127,255,212,0.8)'; ctx.shadowBlur = 6;
+    line(-90, 330, 90, 330, '#7fffd4');
+    line(-90, 330, -90, BK.WALL, '#7fffd4');
+    line(90, 330, 90, BK.WALL, '#7fffd4');
+    line(-260, -40, -260, BK.WALL, '#7fffd4');
+    line(260, -40, 260, BK.WALL, '#7fffd4');
+    // ligne à 3 points
+    ctx.strokeStyle = '#7fffd4'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const a = Math.PI * (i / 24);
+      const q = bkProj(-Math.cos(a) * 230, 0, BK.HZ - Math.sin(a) * 230);
+      if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // fronton basque (mur de pelote) derrière le panier
+    const wl = bkProj(-300, 0, BK.WALL), wr = bkProj(300, 0, BK.WALL);
+    const top = bkProj(0, 640, BK.WALL), shoulder = bkProj(300, 520, BK.WALL);
+    const wallGrad = ctx.createLinearGradient(0, top.y, 0, wl.y);
+    wallGrad.addColorStop(0, '#d9b99b');
+    wallGrad.addColorStop(1, '#8d6f78');
+    ctx.fillStyle = wallGrad;
+    ctx.beginPath();
+    ctx.moveTo(wl.x, wl.y);
+    ctx.lineTo(wl.x, shoulder.y);
+    ctx.quadraticCurveTo(W / 2, top.y - 34, wr.x, shoulder.y);
+    ctx.lineTo(wr.x, wr.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.save();
+    ctx.strokeStyle = '#ff2fa0'; ctx.lineWidth = 3;
+    ctx.shadowColor = 'rgba(255,47,160,0.9)'; ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.restore();
+    // bande rouge du fronton et inscription
+    ctx.fillStyle = '#c8102e';
+    const band = bkProj(0, 60, BK.WALL);
+    ctx.fillRect(wl.x, band.y, wr.x - wl.x, 4);
+    ctx.fillStyle = '#2f8f4e';
+    ctx.font = 'bold 11px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('ONGI ETORRI', W / 2, bkProj(0, 600, BK.WALL).y + 16);
+    drawLauburu(wl.x + 22, shoulder.y + 18, 7);
+    drawLauburu(wr.x - 22, shoulder.y + 18, 7);
+
+    // support du panneau, fixé au fronton
+    const s1 = bkProj(0, BK.HY + 30, BK.BZ), s2 = bkProj(0, BK.HY + 30, BK.WALL);
+    ctx.fillStyle = '#555a66';
+    ctx.fillRect(s1.x - 3, s2.y, 6, s1.y - s2.y + 3);
+    // panneau
+    const b1 = bkProj(-80, BK.HY + 120, BK.BZ), b2 = bkProj(80, BK.HY - 20, BK.BZ);
+    ctx.fillStyle = 'rgba(20,10,30,0.85)';
+    ctx.fillRect(b1.x, b1.y, b2.x - b1.x, b2.y - b1.y);
+    ctx.save();
+    ctx.shadowColor = 'rgba(127,255,212,0.9)'; ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#7fffd4'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(b1.x, b1.y, b2.x - b1.x, b2.y - b1.y);
+    const q1 = bkProj(-26, BK.HY + 50, BK.BZ), q2 = bkProj(26, BK.HY + 2, BK.BZ);
+    ctx.strokeStyle = '#ff2fa0'; ctx.shadowColor = 'rgba(255,47,160,0.9)';
+    ctx.strokeRect(q1.x, q1.y, q2.x - q1.x, q2.y - q1.y);
+    ctx.restore();
+
+    // ballon : ombre au sol toujours sous le panier ; le ballon lui-même derrière ou devant le cercle
+    const b = bk.ball;
+    const sh = bkProj(b.x, 0, b.z);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(sh.x, sh.y, BK.BALL * sh.s, BK.BALL * sh.s * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    const inHoop = Math.hypot(b.x, b.z - BK.HZ) < BK.RIM + BK.BALL && b.y < BK.HY + BK.BALL;
+    const behind = b.z > BK.HZ || inHoop;
+    drawRim('back');
+    if (behind) drawBasketBall(b);
+    drawNet();
+    drawRim('front');
+    if (!behind) drawBasketBall(b);
+
+    // flèche de visée pendant le geste
+    if (bk.drag && bk.phase === 'aim') {
+      const o = bkProj(b.x, b.y, b.z);
+      const dx = bk.drag.dx, dy = bk.drag.dy;
+      if (dy > 8) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,212,0,0.85)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + dx, o.y - dy); ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // particules (panier marqué)
+    for (const pt of particles) {
+      ctx.globalAlpha = Math.min(1, pt.life / 20);
+      ctx.fillStyle = pt.color;
+      ctx.fillRect(pt.x - 1.5, pt.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+
+    drawBasketHud(bk, horY);
+  }
+
+  function drawRim(half) {
+    ctx.save();
+    ctx.strokeStyle = '#ff5a1f'; ctx.lineWidth = 3;
+    ctx.shadowColor = 'rgba(255,90,31,0.9)'; ctx.shadowBlur = 8;
+    ctx.beginPath();
+    const a0 = half === 'back' ? 0 : Math.PI, a1 = a0 + Math.PI;
+    for (let i = 0; i <= 20; i++) {
+      const a = a0 + (a1 - a0) * i / 20;
+      const q = bkProj(Math.cos(a) * BK.RIM, BK.HY, BK.HZ + Math.sin(a) * BK.RIM);
+      if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // filet : fils du cercle vers un petit cercle plus bas ; il s'étire quand un panier passe
+  function drawNet() {
+    const stretch = basket.net > 0 ? Math.sin(basket.net / 30 * Math.PI) * 18 : 0;
+    const lowY = BK.HY - 48 - stretch, lowR = BK.RIM * 0.55;
+    ctx.strokeStyle = 'rgba(245,240,230,0.85)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const top = bkProj(Math.cos(a) * BK.RIM, BK.HY, BK.HZ + Math.sin(a) * BK.RIM);
+      const a2 = a + Math.PI / 12;
+      const bot = bkProj(Math.cos(a2) * lowR, lowY, BK.HZ + Math.sin(a2) * lowR);
+      ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y);
+    }
+    for (const f of [0.5, 1]) {
+      const r = BK.RIM + (lowR - BK.RIM) * f, y = BK.HY + (lowY - BK.HY) * f;
+      for (let i = 0; i <= 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const q = bkProj(Math.cos(a) * r, y, BK.HZ + Math.sin(a) * r);
+        if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
+      }
+    }
+    ctx.stroke();
+  }
+
+  function drawBasketBall(b) {
+    const q = bkProj(b.x, b.y, b.z);
+    const r = BK.BALL * q.s;
+    ctx.save();
+    ctx.translate(q.x, q.y);
+    ctx.shadowColor = 'rgba(255,47,160,0.7)'; ctx.shadowBlur = 10;
+    ctx.fillStyle = '#ff7a1a';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.rotate(b.spin);
+    ctx.strokeStyle = '#3a1406'; ctx.lineWidth = Math.max(1, r * 0.1);
+    ctx.beginPath();
+    ctx.moveTo(-r, 0); ctx.lineTo(r, 0);
+    ctx.moveTo(0, -r); ctx.lineTo(0, r);
+    ctx.moveTo(-r * 0.7, -r * 0.7); ctx.quadraticCurveTo(-r * 0.2, 0, -r * 0.7, r * 0.7);
+    ctx.moveTo(r * 0.7, -r * 0.7); ctx.quadraticCurveTo(r * 0.2, 0, r * 0.7, r * 0.7);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.arc(-r * 0.35, -r * 0.35, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawBasketHud(bk, horY) {
+    ctx.textAlign = 'center';
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,47,160,0.9)'; ctx.shadowBlur = 10;
+    ctx.font = 'bold 18px "Courier New", monospace';
+    ctx.fillStyle = '#ff2fa0';
+    ctx.fillText('PANIERS ' + bk.made + ' / ' + BK.NEED, W / 2, 96);
+    ctx.restore();
+    // les 10 ballons : restant (orange), marqué (aqua), raté (gris)
+    const y = canvas.height - 26, gap = 30, x0 = W / 2 - gap * (BK.BALLS - 1) / 2;
+    for (let i = 0; i < BK.BALLS; i++) {
+      const res = bk.results[i], x = x0 + i * gap;
+      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2);
+      if (res === 'swish' || res === 'in') { ctx.fillStyle = '#7fffd4'; ctx.fill(); }
+      else if (res === 'miss') { ctx.fillStyle = '#3a3346'; ctx.fill(); }
+      else {
+        ctx.fillStyle = i === bk.shot && bk.phase !== 'end' ? '#ffd400' : '#ff7a1a';
+        ctx.fill();
+      }
+      if (res === 'swish' || res === 'in') {
+        ctx.strokeStyle = '#0d0616'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x - 1, y + 3); ctx.lineTo(x + 4, y - 3); ctx.stroke();
+      }
+    }
+    // message du dernier tir
+    if (bk.msg) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, bk.msg.t / 15);
+      ctx.font = 'bold 26px "Courier New", monospace';
+      ctx.shadowColor = bk.msg.color; ctx.shadowBlur = 12;
+      ctx.fillStyle = bk.msg.color;
+      ctx.fillText(bk.msg.txt, W / 2, horY + 70);
+      ctx.restore();
+    }
+    const small = (txt, yy, col) => { ctx.font = 'bold 13px "Courier New", monospace'; ctx.fillStyle = col; ctx.fillText(txt, W / 2, yy); };
+    if (bk.phase === 'intro') {
+      ctx.fillStyle = 'rgba(13,6,22,0.75)';
+      ctx.fillRect(20, horY - 20, W - 40, 110);
+      ctx.save();
+      ctx.font = 'bold 22px "Courier New", monospace';
+      ctx.shadowColor = 'rgba(127,255,212,0.9)'; ctx.shadowBlur = 10;
+      ctx.fillStyle = '#7fffd4';
+      ctx.fillText(bk.retry ? 'ENCORE UNE FOIS !' : 'BONUS : PANIER !', W / 2, horY + 10);
+      ctx.restore();
+      small(BK.NEED + ' paniers sur ' + BK.BALLS + ' ballons', horY + 38, '#ffd400');
+      small('pour passer à Anglet.', horY + 56, '#ffd400');
+      small('Sinon : -1 ♥', horY + 76, '#ff5566');
+    } else if (bk.phase === 'aim' && bk.shot === 0 && !bk.drag) {
+      // démonstration du geste : un doigt qui glisse vers le haut
+      const o = bkProj(BK.X0, BK.Y0, BK.Z0);
+      const k = (frame % 60) / 60;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = '#ffd400';
+      ctx.beginPath(); ctx.arc(o.x + 26, o.y - k * 110, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = 'rgba(13,6,22,0.75)';
+      ctx.fillRect(W / 2 - 120, o.y - 78, 240, 24);
+      small('GLISSE VERS LE PANIER ↑', o.y - 61, '#ffd400');
+    } else if (bk.phase === 'end') {
+      ctx.fillStyle = 'rgba(13,6,22,0.8)';
+      ctx.fillRect(20, horY - 10, W - 40, 90);
+      ctx.save();
+      ctx.font = 'bold 26px "Courier New", monospace';
+      const col = bk.passed ? '#7fffd4' : '#ff5566';
+      ctx.shadowColor = col; ctx.shadowBlur = 12; ctx.fillStyle = col;
+      ctx.fillText(bk.passed ? 'QUALIFIÉ !' : 'RATÉ…', W / 2, horY + 26);
+      ctx.restore();
+      small(bk.passed ? 'Direction Anglet !' : (lives > 1 ? '-1 ♥  On recommence !' : '-1 ♥'), horY + 56, '#ffd400');
+    }
+    ctx.textAlign = 'left';
+  }
+
+  // geste de lancer : n'importe où sur l'écran (la manette est masquée pendant le panier)
+  function basketCanvasScale() {
+    const rect = canvas.getBoundingClientRect();
+    return rect.height ? canvas.height / rect.height : 1;
+  }
+  window.addEventListener('pointerdown', (e) => {
+    if (state !== 'basket' || paused || !basket || basket.phase !== 'aim') return;
+    if (e.target && e.target.closest && e.target.closest('button, #pauseOverlay, #overlay, input')) return;
+    if (e.cancelable) e.preventDefault();
+    if (e.pointerType === 'touch') touchInput = true;
+    Audio2.resume();
+    basket.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, k: basketCanvasScale() };
+  });
+  window.addEventListener('pointermove', (e) => {
+    const d = basket && basket.drag;
+    if (!d || d.id !== e.pointerId) return;
+    d.dx = (e.clientX - d.x) * d.k;
+    d.dy = (d.y - e.clientY) * d.k;
+  });
+  const basketRelease = (e) => {
+    const d = basket && basket.drag;
+    if (!d || d.id !== e.pointerId) return;
+    d.dx = (e.clientX - d.x) * d.k;
+    d.dy = (d.y - e.clientY) * d.k;
+    basket.drag = null;
+    if (state === 'basket' && !paused) basketShoot(d.dx, d.dy);
+  };
+  window.addEventListener('pointerup', basketRelease);
+  window.addEventListener('pointercancel', (e) => { if (basket && basket.drag && basket.drag.id === e.pointerId) basket.drag = null; });
 
   // ================================================================
   //  BOUCLE PRINCIPALE (pas fixe : même vitesse sur un écran 60 ou 120 Hz)
@@ -3846,7 +4356,7 @@
   const pauseOverlay = document.getElementById('pauseOverlay');
   const btnPause = document.getElementById('btnPause');
   function setPaused(v) {
-    if (v && state !== 'playing' && state !== 'intro') return;
+    if (v && state !== 'playing' && state !== 'intro' && state !== 'basket') return;
     if (paused === v) return;
     paused = v;
     pauseOverlay.classList.toggle('hidden', !v);
@@ -3854,7 +4364,8 @@
     keys.left = keys.right = keys.jump = keys.trick = false;
     document.querySelectorAll('#pad .on').forEach((el) => el.classList.remove('on'));
     if (v) { Audio2.stopMusic(); Audio2.stopGrindSfx(); }
-    else if (state === 'playing') { Audio2.resume(); Audio2.startMusic(levelIndex); }
+    else if (state === 'playing' || state === 'basket') { Audio2.resume(); Audio2.startMusic(levelIndex); }
+    if (basket) basket.drag = null;
   }
   ['pointerdown', 'touchstart', 'mousedown', 'click'].forEach((evt) => {
     btnPause.addEventListener(evt, (e) => e.stopPropagation());
@@ -3878,6 +4389,7 @@
     if (state === 'playing') updatePlaying();
     else if (state === 'dying') updateDying();
     else if (state === 'clear') updateClear();
+    else if (state === 'basket') updateBasket();
     else if (state === 'intro') {
       if (--stateTimer <= 0) startPlaying();
     } else if (state === 'won') {
@@ -3896,6 +4408,7 @@
     ctx.clearRect(0, 0, W, canvas.height);
     if (state === 'ready') drawTitleBackdrop();
     else if (state === 'intro') drawIntro();
+    else if (state === 'basket') drawBasket();
     else drawWorld();
     updateHud();
     requestAnimationFrame(loop);
@@ -4054,7 +4567,7 @@
       run(n) { for (let i = 0; i < n; i++) step(); },
       render() {
         ctx.clearRect(0, 0, W, canvas.height);
-        if (state === 'ready') drawTitleBackdrop(); else if (state === 'intro') drawIntro(); else drawWorld();
+        if (state === 'ready') drawTitleBackdrop(); else if (state === 'intro') drawIntro(); else if (state === 'basket') drawBasket(); else drawWorld();
         updateHud();
       },
       info() { return { state, levelIndex, score, coinCount, lives, timeLeft, big: player.big, x: Math.round(player.x), y: Math.round(player.y), onGround: player.onGround, grinding, grindStyle, camX: Math.round(camX), enemies: enemies.length }; },
@@ -4081,8 +4594,12 @@
       flames() { return flames.map((f) => Object.assign({ c: f.c }, flameState(f))); },
       flameCycle: { period: 200, on: 70 },
       grid() { return level.grid.map((r) => r.join('')); },
-      def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length, boss: !!level.def.boss }; },
+      def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length, boss: !!level.def.boss, bonusBasket: !!level.def.bonusBasket }; },
       setPaused, isPaused: () => paused,
+      basket() { return basket && { phase: basket.phase, shot: basket.shot, made: basket.made, results: basket.results.slice(), ball: basket.ball }; },
+      beginBasket() { overlay.classList.add('hidden'); beginBasket(); },
+      shoot(dx, dy) { return basketShoot(dx, dy); },
+      basketConsts: BK,
       toTitle() { state = 'ready'; overlay.classList.remove('hidden'); level = buildLevel(0); },
       setCoins(n) { coinCount = n; },
       consts: { T, ROWS, LEVEL_Y, GROUND_ROW, GROUND_Y }
