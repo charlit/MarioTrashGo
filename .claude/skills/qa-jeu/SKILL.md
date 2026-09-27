@@ -20,12 +20,14 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
   **Change la valeur de `v` à chaque rechargement après une modification.** Le serveur Python n'envoie aucun en-tête
   de cache, donc le navigateur peut garder l'ancienne page. Pour vérifier la version chargée, cherche dans
   `document.documentElement.outerHTML` un commentaire que tu viens d'ajouter.
+- **Si le panneau du navigateur est masqué**, la page fait 0 × 0 pixel, et les tests qui visent un point de l'écran
+  (« soleil secret », « croix glissante ») échouent. Fais `resize_window` en preset `mobile` avant de lancer la suite.
 
 ## 2. API de debug (`window.__tg`, seulement avec `?debug`)
 
 | Appel | Effet |
 |---|---|
-| `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, 3 = boss Tartalo à la Rhune, dernier niveau), intro sautée |
+| `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, … le boss Tartalo à la Rhune est toujours le DERNIER niveau), intro sautée |
 | `run(n)` | Avance de `n` images (60 par seconde de jeu) |
 | `press(k)` / `release(k)` | Touches `left`, `right`, `jump` (les figures sont automatiques) |
 | `warp(col)` | Téléporte le joueur à la colonne `col`, sans changer sa hauteur |
@@ -40,7 +42,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 24 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 25 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -84,7 +86,8 @@ Pour agrandir le personnage, copie des zones du canvas dans un canvas temporaire
 Vérifie :
 - **Course** : les jambes alternent quand on tient `right` (capture 8 images espacées de 3 frames). À l'arrêt, les jambes sont droites.
 - **Flammes** : grille sur le trottoir, braises + lueur en alerte, grande flamme néon quand elles brûlent.
-- **Pas de planche de skate** visible, ni au sol ni en l'air ni au crash.
+- **Planche de skate** visible SEULEMENT pendant un grind : à plat sur les deux trucks (50-50) ou inclinée nez sur la barre
+  et arrière levé (nosegrind), avec le nom de la figure. Jamais au sol, en l'air ni au crash.
 - **Figures** (automatiques à chaque saut, à tour de rôle) : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient). Il n'y a plus de touche FIGURE.
 - **Décors** : Biarritz DE JOUR (ciel bleu, nuages, mer turquoise et surfeurs, Hôtel du Palais, phare blanc, tentes rayées, Rocher de la Vierge et passerelle, crampottes, promenade blanche, palmiers, hortensias), la Rhune (montagne, fronton, moutons), Anglet (dunes, planches de surf), Bayonne (nuit, étoiles, lauburu).
   Vérifie aussi les tonneaux de cidrerie (cerclages, robinet, goutte de cidre), les blocs `?` jaunes, le drapeau au lauburu et le fronton « ONGI ETORRI ».
@@ -108,7 +111,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/24, avec le détail des échecs) ;
+- le résultat de la suite (X/25, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

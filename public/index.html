@@ -1186,6 +1186,10 @@
 
   // grind / figures / combo (repris de TrashGO)
   let grinding = false, grindPts = 0, grindFrames = 0;
+  // style du grind, tiré au hasard à chaque rail : 'fifty' (50-50, planche à plat sur les deux trucks)
+  // ou 'nose' (nosegrind : seul le nez de la planche frotte, l'arrière est levé — rapporte plus)
+  let grindStyle = null;
+  const GRIND_LABELS = { fifty: '50-50', nose: 'NOSEGRIND' };
   let combo = 1, comboTimer = 0;
   let trick = null, trickCycleIndex = 0;
   const TRICK_KINDS = ['salto', 'ecart', 'vrille'];
@@ -1543,8 +1547,9 @@
     if (!grinding) return;
     grinding = false;
     Audio2.stopGrindSfx();
-    if (grindPts > 0) addScore(grindPts, player.x, player.y - 12, '#7fffd4', 'GLISSE!');
+    if (grindPts > 0) addScore(Math.round(grindPts), player.x, player.y - 12, '#7fffd4', (GRIND_LABELS[grindStyle] || 'GRIND') + '!');
     grindPts = 0;
+    grindStyle = null;
   }
 
   // ---- blocs cognés par la tête ----
@@ -1657,13 +1662,20 @@
       if (!grinding) {
         grinding = true;
         grindPts = 0; grindFrames = 0;
+        grindStyle = Math.random() < 0.5 ? 'nose' : 'fifty';
+        addFloatingText(GRIND_LABELS[grindStyle], player.x, player.y - 14, '#7fffd4');
         bumpCombo();
         Audio2.startGrindSfx();
       }
       grindFrames++;
-      if (grindFrames % 4 === 0) grindPts += combo;
+      // le nosegrind (plus dur) rapporte 1,5 fois plus
+      if (grindFrames % 4 === 0) grindPts += combo * (grindStyle === 'nose' ? 1.5 : 1);
       if (frame % 2 === 0) {
-        particles.push({ x: player.x + player.w / 2 - player.facing * 8, y: player.y + player.h, vx: -player.facing * (1 + Math.random()), vy: -1 - Math.random() * 1.5, life: 14, color: '#ffd400' });
+        // étincelles : sous le nez de la planche (nosegrind) ou sous l'un des deux trucks (50-50)
+        const sparkX = grindStyle === 'nose'
+          ? player.x + player.w / 2 + player.facing * 14
+          : player.x + player.w / 2 + player.facing * ((frame % 4 === 0) ? 11 : -11);
+        particles.push({ x: sparkX, y: player.y + player.h, vx: -player.facing * (1 + Math.random()), vy: -1 - Math.random() * 1.5, life: 14, color: '#ffd400' });
       }
     } else if (grinding) {
       endGrind();
@@ -3586,7 +3598,9 @@
       ctx.scale(-squashX * player.facing, squashY);
       ctx.translate(-drawW / 2, -drawH / 2);
     } else {
-      ctx.translate(px + drawW / 2, py + drawH + bobY);
+      // en grind, le skateur est debout sur sa planche : on le remonte de l'épaisseur de la planche
+      const lift = (grinding && !dying) ? BOARD_LIFT : 0;
+      ctx.translate(px + drawW / 2, py + drawH + bobY - lift);
       ctx.scale(-squashX * player.facing, squashY);
       ctx.translate(-drawW / 2, -drawH);
     }
@@ -3602,7 +3616,8 @@
       drawSpriteLeg(SPR.legs[0], aL, kx, ky);
       // le buste penche vers l'avant, dans le sens de la course (pivot à la hanche),
       // d'autant plus qu'on va vite ; en l'air la rotation globale s'en charge déjà
-      const lean = (airborne || dying) ? 0 : -0.2 * Math.max(-1, Math.min(1, player.vx * player.facing / 3.6));
+      let lean = (airborne || dying) ? 0 : -0.2 * Math.max(-1, Math.min(1, player.vx * player.facing / 3.6));
+      if (grinding && grindStyle === 'nose') lean -= 0.12; // en nosegrind, le poids est sur l'avant
       ctx.save();
       ctx.translate(SPR.w / 2 * kx, SPR.hip * ky);
       ctx.rotate(lean);
@@ -3613,6 +3628,51 @@
       ctx.fillStyle = '#ff2fa0';
       ctx.fillRect(0, 0, drawW, drawH);
     }
+    if (grinding && !dying) drawGrindBoard(drawW, drawH, grindStyle);
+    ctx.restore();
+  }
+
+  // Planche de skate (même style que TrashGO) sous les pieds pendant le grind.
+  // Repère local du joueur : pieds en y = drawH, l'avant (le sens de la course) vers -x.
+  const BOARD_LIFT = 7;
+  function drawGrindBoard(drawW, drawH, style) {
+    ctx.save();
+    ctx.shadowBlur = 0;
+    const deckW = drawW + 12, deckX = -6, deckY = drawH, deckH = 4, wheelR = 3;
+    if (style === 'nose') {
+      // nosegrind : pivot sur le nez (à l'avant, côté -x), l'arrière de la planche se lève
+      const nx = deckX + 3, ny = deckY + BOARD_LIFT;
+      ctx.translate(nx, ny); ctx.rotate(-0.32); ctx.translate(-nx, -ny);
+    }
+    const wheelY = deckY + deckH + wheelR - 1;
+    const wheelXs = [deckX + 6, deckX + deckW - 6];
+    for (const wx of wheelXs) {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(wx, wheelY, wheelR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ffd400'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(wx + Math.cos(runPhase * 3) * (wheelR - 0.5), wheelY + Math.sin(runPhase * 3) * (wheelR - 0.5));
+      ctx.lineTo(wx - Math.cos(runPhase * 3) * (wheelR - 0.5), wheelY - Math.sin(runPhase * 3) * (wheelR - 0.5));
+      ctx.stroke();
+    }
+    // trucks (métal) : c'est eux qui frottent sur la barre
+    ctx.fillStyle = '#9aa0a6';
+    for (const wx of wheelXs) ctx.fillRect(wx - 4, deckY + deckH - 1, 8, 2);
+    // plateau avec kicktails relevés, grip, liseré rose néon
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.moveTo(deckX + 3, deckY + deckH);
+    ctx.lineTo(deckX, deckY + 1);
+    ctx.lineTo(deckX + 4, deckY - 2);
+    ctx.lineTo(deckX + deckW - 4, deckY - 2);
+    ctx.lineTo(deckX + deckW, deckY + 1);
+    ctx.lineTo(deckX + deckW - 3, deckY + deckH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#2b2b2b';
+    ctx.fillRect(deckX + 4, deckY - 2, deckW - 8, 2);
+    ctx.fillStyle = '#ff2fa0';
+    ctx.fillRect(deckX + 3, deckY + deckH - 1, deckW - 6, 1);
     ctx.restore();
   }
 
@@ -3997,7 +4057,7 @@
         if (state === 'ready') drawTitleBackdrop(); else if (state === 'intro') drawIntro(); else drawWorld();
         updateHud();
       },
-      info() { return { state, levelIndex, score, coinCount, lives, timeLeft, big: player.big, x: Math.round(player.x), y: Math.round(player.y), onGround: player.onGround, grinding, camX: Math.round(camX), enemies: enemies.length }; },
+      info() { return { state, levelIndex, score, coinCount, lives, timeLeft, big: player.big, x: Math.round(player.x), y: Math.round(player.y), onGround: player.onGround, grinding, grindStyle, camX: Math.round(camX), enemies: enemies.length }; },
       warp(col) { player.x = col * T; camX = Math.max(0, Math.min(player.x - W * 0.4, level.cols * T - W)); },
       // démarre une partie neuve directement au niveau i (intro sautée)
       start(i) {

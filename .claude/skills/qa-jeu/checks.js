@@ -511,6 +511,7 @@
     const overlay = document.getElementById('overlay');
     const canvas = document.getElementById('game');
     if (getComputedStyle(overlay).display === 'none' && !g.toTitle) { check('soleil secret', false, 'écran d’accueil introuvable'); return; }
+    if (!canvas.clientWidth) { check('soleil secret', false, 'page sans taille (panneau du navigateur masqué) : faire resize_window preset mobile puis recharger'); return; }
     const tapAt = (lx, ly) => {
       const rect = canvas.getBoundingClientRect();
       const x = rect.left + canvas.clientLeft + lx * canvas.clientWidth / canvas.width;
@@ -522,7 +523,10 @@
     res.soleil = { niveau: g.info().levelIndex, boss: !!g.boss() };
     g.toTitle(); tapAt(120, 420); g.run(3);
     res.ailleurs = { niveau: g.info().levelIndex };
-    check('soleil secret', res.soleil.boss && res.soleil.niveau === 3 && res.ailleurs.niveau === 0, JSON.stringify(res));
+    // l'arène du boss est le DERNIER niveau (pas forcément le n° 3 si on ajoute des niveaux)
+    let bi = -1; for (let i = 0; i < g.def().levels; i++) { g.start(i); if (g.def().boss) { bi = i; break; } }
+    res.niveauBossAttendu = bi;
+    check('soleil secret', res.soleil.boss && res.soleil.niveau === bi && res.ailleurs.niveau === 0, JSON.stringify(res));
   });
 
   // 24. Écrans de fin protégés : un appui sur SAUT juste après la victoire / le game over ne doit
@@ -552,6 +556,33 @@
     }
     const ok = res.overApresAppuiImmediat === 'over' && res.overApresUneSeconde === 'intro' && res.wonApresAppuiImmediat === 'won' && res.wonApresUneSeconde === 'intro';
     check('écran de fin protégé', ok, JSON.stringify(res));
+  });
+
+  // 25. Grind avec planche : à chaque rail, un style tiré au hasard (50-50 ou nosegrind),
+  //     les deux apparaissent, rapportent des points, et le style disparaît à la sortie du rail
+  safe('grind 50-50 / nosegrind', () => {
+    const seen = { fifty: 0, nose: 0 };
+    const pts = { fifty: [], nose: [] };
+    let leftover = false;
+    for (let k = 0; k < 20; k++) {
+      g.start(0);
+      g.enemies().forEach((e) => { e.alive = false; e.dead = 'gone'; });
+      const grid = g.grid();
+      let rc = -1, rr = -1; for (let r = 0; r < grid.length && rc < 0; r++) { const c = grid[r].indexOf('R'); if (c >= 0) { rc = c; rr = r; } }
+      const p = g.player();
+      g.warp(rc); g.run(1); g.place(rc * T + 4, LEVEL_Y + rr * T - p.h - 6, 1);
+      g.press('right');
+      let n = 0; while (!g.info().grinding && n < 40) { g.run(1); n++; }
+      const style = g.info().grindStyle;
+      const s0 = g.info().score;
+      n = 0; while (g.info().grinding && n < 200) { g.run(1); n++; }
+      g.release('right');
+      if (style) { seen[style]++; pts[style].push(g.info().score - s0); }
+      if (g.info().grindStyle !== null) leftover = true;
+    }
+    const avg = (a) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0;
+    const detail = { vus: seen, pointsMoyens: { fifty: avg(pts.fifty), nose: avg(pts.nose) }, styleResteApres: leftover };
+    check('grind 50-50 / nosegrind', seen.fifty > 0 && seen.nose > 0 && avg(pts.fifty) > 0 && avg(pts.nose) > avg(pts.fifty) && !leftover, JSON.stringify(detail));
   });
 
   g.start(0);
