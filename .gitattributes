@@ -1,0 +1,2 @@
+# scripts shell : toujours en fins de ligne Unix (sinon bash échoue sous Windows avec autocrlf)
+*.sh text eol=lf
