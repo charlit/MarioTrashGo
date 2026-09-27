@@ -525,6 +525,35 @@
     check('soleil secret', res.soleil.boss && res.soleil.niveau === 3 && res.ailleurs.niveau === 0, JSON.stringify(res));
   });
 
+  // 24. Écrans de fin protégés : un appui sur SAUT juste après la victoire / le game over ne doit
+  //     PAS relancer une partie (bug : le joueur qui tapait encore perdait son score sans le voir) ;
+  //     après une seconde, l'appui relance bien
+  safe('écran de fin protégé', () => {
+    const tapSpace = () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' })); };
+    const res = {};
+    // game over
+    g.start(0);
+    for (let k = 0; k < 3; k++) {
+      const gr = g.grid(); let gap = -1; for (let c = 5; c < gr[0].length; c++) if (gr[GROUND_ROW][c] === ' ') { gap = c; break; }
+      g.warp(gap); g.run(1); g.place(gap * T + 5, GROUND_Y - 10, 0);
+      let n = 0; while (g.info().state !== 'over' && g.info().state !== 'intro' && n < 400) { g.run(1); n++; }
+      n = 0; while (g.info().state === 'intro' && n < 400) { g.run(1); n++; }
+    }
+    res.overTout = g.info().state; tapSpace(); g.run(1); res.overApresAppuiImmediat = g.info().state;
+    g.run(70); tapSpace(); g.run(1); res.overApresUneSeconde = g.info().state;
+    // victoire
+    if (g.boss) {
+      let bi = -1; for (let i = 0; i < g.def().levels; i++) { g.start(i); if (g.def().boss) { bi = i; break; } }
+      g.start(bi); const p = g.player(), b = g.boss();
+      for (let hit = 0; hit < 3; hit++) { b.state = 'stunned'; b.t = 0; b.flash = 0; b.y = GROUND_Y - b.h; g.place(b.x + 10, b.y - p.h - 24, 3); let k = 0; while (b.hp === 3 - hit && k < 30) { g.run(1); k++; } p.x = 10; p.y = GROUND_Y - p.h; p.vx = 0; p.vy = 0; p.star = 200; }
+      let k = 0; while (g.info().state !== 'won' && k < 900) { g.run(1); k++; }
+      tapSpace(); g.run(1); res.wonApresAppuiImmediat = g.info().state;
+      g.run(70); tapSpace(); g.run(1); res.wonApresUneSeconde = g.info().state;
+    }
+    const ok = res.overApresAppuiImmediat === 'over' && res.overApresUneSeconde === 'intro' && res.wonApresAppuiImmediat === 'won' && res.wonApresUneSeconde === 'intro';
+    check('écran de fin protégé', ok, JSON.stringify(res));
+  });
+
   g.start(0);
   const failed = results.filter((r) => !r.ok);
   return { total: results.length, echecs: failed.length, results };

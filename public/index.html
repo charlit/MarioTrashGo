@@ -1389,6 +1389,10 @@
     trick = null;
   }
 
+  // Pendant la 1re seconde d'un écran de fin, les appuis sont ignorés : sinon un joueur qui
+  // tape encore sur SAUT relance aussitôt une partie et perd son score sans l'avoir vu.
+  let endLock = 0;
+
   function saveBest() {
     if (score > best) {
       best = score;
@@ -1441,6 +1445,7 @@
 
   function gameOver() {
     state = 'over';
+    endLock = 60;
     Audio2.stopMusic();
     saveBest();
     showEndScreen(
@@ -1454,6 +1459,7 @@
   // enregistrement du score. Un appui ailleurs relance une partie depuis Biarritz.
   function gameWon() {
     state = 'won';
+    endLock = 60;
     stateTimer = 0;
     // le bandeau "ZORIONAK !" du K.O. ferait doublon avec le titre de l'écran de fin
     clearTimeout(milestoneBanner._hideTimer);
@@ -1496,6 +1502,7 @@
   //  ACTIONS DU JOUEUR
   // ================================================================
   function pressJump() {
+    if ((state === 'over' || state === 'won') && endLock > 0) return;
     if (state === 'ready' || state === 'over' || state === 'won') { startGame(); return; }
     player.jumpBuffer = 7;
   }
@@ -3807,6 +3814,7 @@
 
   function step() {
     if (paused) return;
+    if (endLock > 0 && (state === 'over' || state === 'won')) endLock--;
     if (state === 'playing') updatePlaying();
     else if (state === 'dying') updateDying();
     else if (state === 'clear') updateClear();
@@ -3974,6 +3982,7 @@
   overlay.addEventListener('pointerdown', (e) => {
     if (e.cancelable) e.preventDefault();
     if (state === 'ready' && touchesSun(e)) { startGame(bossLevelIndex()); return; }
+    if ((state === 'over' || state === 'won') && endLock > 0) return;
     if (state === 'ready' || state === 'over' || state === 'won') startGame();
   });
 

@@ -40,7 +40,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 23 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 24 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -68,6 +68,8 @@ Règles de jeu que la suite protège :
   Il doit rester BATTABLE sans triche : un robot qui esquive et saute sur la tête quand il est sonné doit gagner
   (test « boss battable »). Il ne doit jamais coincer le joueur, ni être protégé par une plateforme au-dessus de lui.
 - Passage secret : sur l'écran d'accueil, toucher le soleil lance directement le boss (ailleurs : partie normale).
+- Écrans de fin (victoire, game over) : les appuis sont ignorés pendant 1 seconde, pour ne pas perdre son score
+  en tapant encore sur SAUT.
 - Sauter sur place en boucle ne rapporte presque rien, et le combo reste plafonné à x8.
   (Bug historique : les figures automatiques faisaient monter le combo sans limite.)
 - Les pièces au-dessus d'un rail se ramassent en glissant, sans sauter (posées à hauteur du rail + 1).
@@ -106,7 +108,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/23, avec le détail des échecs) ;
+- le résultat de la suite (X/24, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.
