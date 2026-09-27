@@ -495,6 +495,26 @@
     check('boss sans téléportation', worst < 6, 'déplacement max ' + worst.toFixed(1) + ' px par image hors saut');
   });
 
+  // 23. Passage secret : sur l'écran d'accueil, toucher le soleil mène directement au boss ;
+  //     toucher ailleurs lance une partie normale au niveau 1
+  safe('soleil secret', () => {
+    const overlay = document.getElementById('overlay');
+    const canvas = document.getElementById('game');
+    if (getComputedStyle(overlay).display === 'none' && !g.toTitle) { check('soleil secret', false, 'écran d’accueil introuvable'); return; }
+    const tapAt = (lx, ly) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = rect.left + canvas.clientLeft + lx * canvas.clientWidth / canvas.width;
+      const y = rect.top + canvas.clientTop + ly * canvas.clientHeight / canvas.height;
+      overlay.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerType: 'touch' }));
+    };
+    const res = {};
+    g.toTitle(); tapAt(390 - 55, 620 * 0.13); g.run(3);
+    res.soleil = { niveau: g.info().levelIndex, boss: !!g.boss() };
+    g.toTitle(); tapAt(120, 420); g.run(3);
+    res.ailleurs = { niveau: g.info().levelIndex };
+    check('soleil secret', res.soleil.boss && res.soleil.niveau === 3 && res.ailleurs.niveau === 0, JSON.stringify(res));
+  });
+
   g.start(0);
   const failed = results.filter((r) => !r.ok);
   return { total: results.length, echecs: failed.length, results };

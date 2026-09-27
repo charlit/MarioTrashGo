@@ -1278,9 +1278,9 @@
   // ================================================================
   //  CYCLE DE PARTIE
   // ================================================================
-  function startGame() {
+  function startGame(startLevel) {
     Audio2.resume();
-    score = 0; coinCount = 0; lives = 3; levelIndex = 0;
+    score = 0; coinCount = 0; lives = 3; levelIndex = startLevel || 0;
     player.big = false;
     checkpointReached = false;
     overlay.classList.add('hidden');
@@ -2758,6 +2758,9 @@
     return cityCache[theme.key];
   }
 
+  // position du soleil (ou de la lune) : sur l'écran d'accueil, c'est aussi un passage secret
+  const SUN_X = W - 55, SUN_Y = H * 0.13;
+
   function drawBackground() {
     const theme = level.theme;
     const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -2795,7 +2798,7 @@
     ctx.fillStyle = theme.sun;
     ctx.globalAlpha = theme.day ? 1 : 0.85;
     ctx.beginPath();
-    ctx.arc(W - 55, H * 0.13, 24, 0, Math.PI * 2);
+    ctx.arc(SUN_X, SUN_Y, 24, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
 
@@ -3891,9 +3894,24 @@
   dpad.addEventListener('lostpointercapture', dpadUp);
   dpad.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  // Passage secret : sur l'écran d'accueil, toucher le soleil mène directement au boss Tartalo.
+  // (coordonnées de l'appui converties dans le repère du canvas, bordure comprise)
+  function touchesSun(e) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !canvas.clientWidth) return false;
+    const x = (e.clientX - rect.left - canvas.clientLeft) * canvas.width / canvas.clientWidth;
+    const y = (e.clientY - rect.top - canvas.clientTop) * canvas.height / canvas.clientHeight;
+    return Math.hypot(x - SUN_X, y - SUN_Y) < 36;
+  }
+  function bossLevelIndex() {
+    for (let i = 0; i < LEVELS.length; i++) if (LEVELS[i].boss) return i;
+    return 0;
+  }
+
   // tap sur l'écran de titre / game over pour (re)lancer
   overlay.addEventListener('pointerdown', (e) => {
     if (e.cancelable) e.preventDefault();
+    if (state === 'ready' && touchesSun(e)) { startGame(bossLevelIndex()); return; }
     if (state === 'ready' || state === 'over') startGame();
   });
 
@@ -3934,6 +3952,7 @@
       grid() { return level.grid.map((r) => r.join('')); },
       def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length, boss: !!level.def.boss }; },
       setPaused, isPaused: () => paused,
+      toTitle() { state = 'ready'; overlay.classList.remove('hidden'); level = buildLevel(0); },
       setCoins(n) { coinCount = n; },
       consts: { T, ROWS, LEVEL_Y, GROUND_ROW, GROUND_Y }
     };
