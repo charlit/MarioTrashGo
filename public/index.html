@@ -220,6 +220,15 @@
     margin-bottom: 8px;
     text-shadow: 0 0 10px rgba(255,85,102,0.8);
   }
+  #overlay .win {
+    color: #ffd400;
+    font-size: clamp(26px, 9vw, 40px); font-size: clamp(22px, 10cqw, 40px);
+    font-weight: bold;
+    letter-spacing: 3px;
+    margin-bottom: 4px;
+    text-shadow: 0 0 12px rgba(255,212,0,0.9), 0 0 26px rgba(255,47,160,0.6);
+  }
+  #overlay .winSub { color: #7fffd4; font-weight: bold; letter-spacing: 1px; }
   .hidden { display: none !important; }
 
   .menuButtons {
@@ -1380,26 +1389,26 @@
     trick = null;
   }
 
-  function gameOver() {
-    state = 'over';
-    Audio2.stopMusic();
+  function saveBest() {
     if (score > best) {
       best = score;
       try { localStorage.setItem('trashgo_world_best', String(best)); } catch (e) {}
       bestEl.textContent = 'BEST ' + best;
     }
+  }
+
+  // Écran de fin (game over ou victoire) : score, pseudo, enregistrement au TOP 10
+  function showEndScreen(headerHtml, replayText) {
     const finalScore = score;
     overlay.innerHTML =
-      '<div class="go">GAME OVER</div>' +
-      '<p>Score : ' + finalScore + '</p>' +
-      '<p>Monde atteint : ' + worldLabel() + '</p>' +
+      headerHtml +
       '<div id="scoreSaveArea">' +
         '<input id="pseudoField" type="text" maxlength="14" placeholder="Ton pseudo (optionnel)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" name="pseudoField_no_autofill">' +
         '<button id="btnSaveScore" type="button">Enregistrer mon score</button>' +
         '<div id="scoreSaveStatus"></div>' +
         '<button id="btnViewScoresOver" type="button" class="secondaryBtn">Voir les scores</button>' +
       '</div>' +
-      '<p style="margin-top:10px;color:#ff2fa0;">Appuie ailleurs pour retenter</p>';
+      '<p style="margin-top:10px;color:#ff2fa0;">' + replayText + '</p>';
     overlay.classList.remove('hidden');
 
     const saveArea = document.getElementById('scoreSaveArea');
@@ -1430,6 +1439,55 @@
     });
   }
 
+  function gameOver() {
+    state = 'over';
+    Audio2.stopMusic();
+    saveBest();
+    showEndScreen(
+      '<div class="go">GAME OVER</div>' +
+      '<p>Score : ' + score + '</p>' +
+      '<p>Monde atteint : ' + worldLabel() + '</p>',
+      'Appuie ailleurs pour retenter');
+  }
+
+  // FIN DU JEU : Tartalo est vaincu. Bonus pour chaque vie restante, feu d'artifice,
+  // enregistrement du score. Un appui ailleurs relance une partie depuis Biarritz.
+  function gameWon() {
+    state = 'won';
+    stateTimer = 0;
+    // le bandeau "ZORIONAK !" du K.O. ferait doublon avec le titre de l'écran de fin
+    clearTimeout(milestoneBanner._hideTimer);
+    milestoneBanner.classList.remove('show');
+    Audio2.stopMusic();
+    Audio2.oneUpSfx();
+    const livesBonus = lives * 1000;
+    score += livesBonus;
+    saveBest();
+    showEndScreen(
+      '<div class="win">ZORIONAK !</div>' +
+      '<p class="winSub">Tartalo est vaincu !</p>' +
+      '<p>Le Pays basque est sauvé.</p>' +
+      '<p>Bonus vies : ' + lives + ' × 1000 = +' + livesBonus + '</p>' +
+      '<p style="color:#ffd400;font-weight:bold;">Score final : ' + score + '</p>',
+      'Appuie ailleurs pour rejouer');
+  }
+
+  // feu d'artifice néon au-dessus de la Rhune (écran de victoire)
+  function updateFireworks() {
+    frame++;
+    stateTimer++;
+    if (stateTimer % 28 === 1) {
+      const cx = 50 + Math.random() * (W - 100), cy = 70 + Math.random() * 160;
+      const col = ['#ff2fa0', '#7fffd4', '#ffd400', '#b400ff', '#ff5566'][Math.floor(Math.random() * 5)];
+      for (let i = 0; i < 26; i++) {
+        const a = (i / 26) * Math.PI * 2, v = 1.6 + Math.random() * 1.4;
+        particles.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 14 + Math.floor(Math.random() * 18), color: col });
+      }
+      if (stateTimer % 56 === 1) Audio2.bumpSfx();
+    }
+    updateParticles();
+  }
+
   function worldLabel() {
     return (Math.floor(levelIndex / LEVELS.length) + 1) + '-' + (levelIndex % LEVELS.length + 1);
   }
@@ -1438,7 +1496,7 @@
   //  ACTIONS DU JOUEUR
   // ================================================================
   function pressJump() {
-    if (state === 'ready' || state === 'over') { startGame(); return; }
+    if (state === 'ready' || state === 'over' || state === 'won') { startGame(); return; }
     player.jumpBuffer = 7;
   }
 
@@ -1963,6 +2021,8 @@
       }
     } else if (clearPhase === 'wait') {
       if (--stateTimer <= 0) {
+        // le boss de fin est vaincu : le jeu est terminé
+        if (level.def.boss) { gameWon(); return; }
         levelIndex++;
         checkpointReached = false;
         beginIntro();
@@ -3752,6 +3812,8 @@
     else if (state === 'clear') updateClear();
     else if (state === 'intro') {
       if (--stateTimer <= 0) startPlaying();
+    } else if (state === 'won') {
+      updateFireworks();
     } else {
       frame++;
     }
@@ -3912,7 +3974,7 @@
   overlay.addEventListener('pointerdown', (e) => {
     if (e.cancelable) e.preventDefault();
     if (state === 'ready' && touchesSun(e)) { startGame(bossLevelIndex()); return; }
-    if (state === 'ready' || state === 'over') startGame();
+    if (state === 'ready' || state === 'over' || state === 'won') startGame();
   });
 
   // outil de test : ?debug expose de quoi faire avancer le jeu image par image

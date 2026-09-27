@@ -412,12 +412,22 @@
     if (b.hp !== 0) problems.push('encore ' + b.hp + ' PV après 3 coups');
     let k = 0; while (g.info().state !== 'clear' && k < 300) { g.run(1); k++; }
     const cleared = g.info().state === 'clear';
+    const livesAtEnd = g.info().lives;
     g.run(700);
     const inf = g.info();
+    // le boss de fin vaincu = FIN DU JEU : écran de victoire avec bonus de vies et score à enregistrer
+    const ov = document.getElementById('overlay');
+    const txt = ov.innerText || '';
     if (!cleared) problems.push('pas de victoire après le K.O.');
-    if (inf.score - score0 < 5000) problems.push('bonus trop faible (' + (inf.score - score0) + ')');
-    if (inf.levelIndex !== bi + 1) problems.push('pas de passage au monde suivant (niveau ' + inf.levelIndex + ')');
-    check('boss', problems.length === 0, problems.length ? problems.join(' | ') : 'Tartalo : contact blessant, rochers, onde de choc, invulnérable hors étourdissement, K.O. en 3 coups, +' + (inf.score - score0) + ' pts, monde suivant OK');
+    if (inf.state !== 'won') problems.push("pas d'écran de fin (état " + inf.state + ')');
+    if (ov.classList.contains('hidden') || !txt.includes('ZORIONAK') || !document.getElementById('pseudoField')) problems.push('écran de victoire incomplet');
+    if (!txt.includes('+' + (livesAtEnd * 1000))) problems.push('bonus de vies absent');
+    if (inf.score - score0 < 5000 + livesAtEnd * 1000) problems.push('bonus trop faible (' + (inf.score - score0) + ')');
+    // un appui ailleurs relance une partie depuis Biarritz
+    ov.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    g.run(3);
+    if (g.info().levelIndex !== 0 || g.info().score !== 0) problems.push('rejouer ne relance pas une partie neuve');
+    check('boss', problems.length === 0, problems.length ? problems.join(' | ') : 'Tartalo : contact blessant, rochers, onde de choc, invulnérable hors étourdissement, K.O. en 3 coups, écran de victoire (+' + (inf.score - score0) + ' pts dont vies), rejouer OK');
   });
 
   // 21. Boss battable SANS TRICHE : un robot qui joue « proprement » (esquive rochers et

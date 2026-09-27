@@ -25,7 +25,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 | Appel | Effet |
 |---|---|
-| `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, 3 = boss Tartalo à la Rhune, 4+ = monde 2…), intro sautée |
+| `start(i)` | Nouvelle partie au niveau `i` (0 = Biarritz, 1 = Anglet, 2 = Bayonne, 3 = boss Tartalo à la Rhune, dernier niveau), intro sautée |
 | `run(n)` | Avance de `n` images (60 par seconde de jeu) |
 | `press(k)` / `release(k)` | Touches `left`, `right`, `jump` (les figures sont automatiques) |
 | `warp(col)` | Téléporte le joueur à la colonne `col`, sans changer sa hauteur |
@@ -63,7 +63,8 @@ Règles de jeu que la suite protège :
 - Chaque niveau a du sol au départ et au checkpoint, un socle `S` sous le drapeau, et un fronton entier avant la fin.
 - Drapeau → bonus de temps → niveau suivant, pour **chaque** niveau (sauf l'arène du boss, sans drapeau).
 - Boss Tartalo (4e niveau) : blesse au contact, lance des rochers, onde de choc à l'atterrissage, vulnérable seulement
-  quand il est sonné (étoiles), K.O. en 3 coups sur la tête, bonus puis monde suivant.
+  quand il est sonné (étoiles), K.O. en 3 coups sur la tête. Sa mort TERMINE LE JEU : écran de victoire « ZORIONAK ! »,
+  bonus de 1000 par vie restante, feu d'artifice, enregistrement du score, appui ailleurs = nouvelle partie.
   Il doit rester BATTABLE sans triche : un robot qui esquive et saute sur la tête quand il est sonné doit gagner
   (test « boss battable »). Il ne doit jamais coincer le joueur, ni être protégé par une plateforme au-dessus de lui.
 - Passage secret : sur l'écran d'accueil, toucher le soleil lance directement le boss (ailleurs : partie normale).

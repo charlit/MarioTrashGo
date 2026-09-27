@@ -12,7 +12,8 @@ horizontal façon Super Mario.
   puis 1-4 **La Rhune** : le boss **Tartalo**, cyclope géant de la mythologie basque
   (béret, gilet en peau de mouton, makila). Il lance des rochers qui roulent et fait une onde
   de choc en retombant ; quand il est **sonné** (étoiles), saute-lui sur la tête — 3 coups.
-  « ZORIONAK ! », puis ça reboucle en 2-1, 2-2… avec des ennemis plus rapides.
+  Sa mort **termine le jeu** : « ZORIONAK ! », feu d'artifice, bonus de 1000 points par vie
+  restante, et on enregistre son score au TOP 10.
 - **Contrôles clavier** : ← → (ou Q/D) pour courir, Espace / ↑ / Z pour sauter
   (maintenir = saut plus haut). Les figures sont automatiques à chaque saut.
 - **Mobile** : manette tactile sous l'écran — croix ◀ ▶ d'un seul bloc (on glisse le
