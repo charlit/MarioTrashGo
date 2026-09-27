@@ -3846,24 +3846,26 @@
 
   // ================================================================
   //  MINI-JEU : PANIER DE BASKET (entre Biarritz et Anglet)
-  //  10 ballons, il faut en mettre au moins 3 pour passer à Anglet ;
-  //  sinon on perd une vie et on recommence. On lance en glissant le doigt
-  //  (ou la souris) vers le haut : la longueur du geste donne la force,
-  //  son inclinaison la direction.
+  //  5 ballons, il faut en mettre au moins 3 ; sinon on perd des points
+  //  (500 par panier manquant). Dans les deux cas on continue vers Anglet.
+  //  Après le 1er panier, le cercle bouge de gauche à droite ; après le 2e,
+  //  de haut en bas. On lance en glissant le doigt (ou la souris) vers le haut :
+  //  la longueur du geste donne la force, son inclinaison la direction.
   // ================================================================
   // Monde en 3D simple : x latéral, y hauteur, z profondeur (distance à la caméra),
   // projeté en perspective. Le panier est accroché devant un fronton basque.
   const BK = {
-    BALLS: 10, NEED: 3,
+    BALLS: 5, NEED: 3, PENALTY: 500,  // pénalité par panier manquant
     F: 600, CAM_H: 343, HOR: 276,     // focale, hauteur de caméra, ligne d'horizon (px)
-    G: 0.6, FLIGHT: 55,               // gravité, durée du vol jusqu'au cercle (images)
+    G: 0.6, FLIGHT: 62,               // gravité, durée du vol jusqu'au cercle (images)
     X0: 0, Y0: 40, Z0: 40,            // ballon au repos, dans les mains
     HY: 440, HZ: 440, RIM: 38,        // cercle : hauteur, profondeur, rayon
     BALL: 18,                         // rayon du ballon
     WALL: 560,                        // mur du fronton
     POWER0: 0.35, POWER_GAIN: 520,    // geste de 35 % de l'écran = pile au cercle
     AIM_GAIN: 230,                    // inclinaison du geste → décalage latéral
-    PTS: 500, SWISH_PTS: 750
+    PTS: 500, SWISH_PTS: 750,
+    MOVE_X: 85, MOVE_Y: 45, MOVE_SPEED: 0.035   // cercle mobile : amplitudes, vitesse (~3 s l'aller-retour)
   };
   BK.BZ = BK.HZ + BK.RIM + 10;        // panneau, juste derrière le cercle
 
@@ -3877,14 +3879,15 @@
     }
   }
 
-  function beginBasket(retry) {
+  function beginBasket() {
     state = 'basket';
     setBasketMode(true);
     particles = []; floatingTexts = [];
     basket = {
       phase: 'intro', t: 0,
       shot: 0, made: 0, results: [],   // results : 'swish' | 'in' | 'miss'
-      ball: null, drag: null, net: 0, msg: null, retry: !!retry, passed: false
+      ball: null, drag: null, net: 0, msg: null, note: null, passed: false, penalty: 0,
+      hx: 0, hy: BK.HY, move: null, moveT: 0   // position du cercle, et son mouvement ('x' puis 'y')
     };
     resetBasketBall();
     Audio2.startMusic(levelIndex);
@@ -3917,10 +3920,11 @@
     b.vy -= BK.G * k;
     b.x += b.vx * k; b.y += b.vy * k; b.z += b.vz * k;
     // cercle : tore de rayon RIM, on repousse le ballon hors du métal
-    const hx = b.x, hz = b.z - BK.HZ;
+    const rx = basket.hx, ry = basket.hy;
+    const hx = b.x - rx, hz = b.z - BK.HZ;
     const hd = Math.hypot(hx, hz) || 0.001;
-    const qx = hx / hd * BK.RIM, qz = BK.HZ + hz / hd * BK.RIM;
-    const nx = b.x - qx, ny = b.y - BK.HY, nz = b.z - qz;
+    const qx = rx + hx / hd * BK.RIM, qz = BK.HZ + hz / hd * BK.RIM;
+    const nx = b.x - qx, ny = b.y - ry, nz = b.z - qz;
     const nd = Math.hypot(nx, ny, nz);
     const minD = BK.BALL + 2;
     if (nd < minD && nd > 0.001) {
@@ -3931,11 +3935,11 @@
         if (!b.touched || Math.abs(vn) > 2) Audio2.rimSfx();
         b.touched = true;
       }
-      b.x = qx + ux * minD; b.y = BK.HY + uy * minD; b.z = qz + uz * minD;
+      b.x = qx + ux * minD; b.y = ry + uy * minD; b.z = qz + uz * minD;
     }
     // panneau
-    if (b.z + BK.BALL > BK.BZ && pz + BK.BALL <= BK.BZ && Math.abs(b.x) < 80 + BK.BALL * 0.5 &&
-        b.y > BK.HY - 20 && b.y < BK.HY + 120) {
+    if (b.z + BK.BALL > BK.BZ && pz + BK.BALL <= BK.BZ && Math.abs(b.x - rx) < 80 + BK.BALL * 0.5 &&
+        b.y > ry - 20 && b.y < ry + 120) {
       b.z = BK.BZ - BK.BALL; b.vz = -Math.abs(b.vz) * 0.8; b.vx *= 0.9;
       b.touched = true;
       Audio2.bumpSfx();
@@ -3943,7 +3947,7 @@
     // mur du fronton
     if (b.z + BK.BALL > BK.WALL) { b.z = BK.WALL - BK.BALL; b.vz = -Math.abs(b.vz) * 0.5; }
     // panier : le centre du ballon traverse le cercle en descendant, par l'intérieur
-    if (!b.scored && py > BK.HY && b.y <= BK.HY && Math.hypot(b.x, b.z - BK.HZ) < BK.RIM - 4) {
+    if (!b.scored && py > ry && b.y <= ry && Math.hypot(b.x - rx, b.z - BK.HZ) < BK.RIM - 4) {
       b.scored = true;
       basketScored(b);
     }
@@ -3964,13 +3968,16 @@
     basket.msg = { txt: (swish ? 'SWISH ! +' : 'PANIER ! +') + pts, color: swish ? '#7fffd4' : '#ffd400', t: 70 };
     Audio2.swishSfx();
     buzz(30);
-    const c = bkProj(0, BK.HY, BK.HZ);
+    const c = bkProj(basket.hx, basket.hy, BK.HZ);
     for (let i = 0; i < 18; i++) {
       const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 2.2;
       particles.push({ x: c.x, y: c.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1, life: 20 + Math.floor(Math.random() * 14),
         color: ['#ff2fa0', '#7fffd4', '#ffd400'][i % 3] });
     }
     if (basket.made === BK.NEED) showMilestoneBanner('QUALIFIÉ !');
+    // le cercle se met à bouger : de gauche à droite après le 1er panier, de haut en bas après le 2e
+    if (basket.made === 1) { basket.move = 'x'; basket.moveT = 0; basket.note = { txt: 'LE PANIER BOUGE ← →', t: 110 }; }
+    else if (basket.made === 2) { basket.move = 'y'; basket.moveT = 0; basket.note = { txt: 'LE PANIER BOUGE ↑ ↓', t: 110 }; }
   }
 
   function updateBasket() {
@@ -3979,6 +3986,14 @@
     bk.t++;
     if (bk.net > 0) bk.net--;
     if (bk.msg && --bk.msg.t <= 0) bk.msg = null;
+    if (bk.note && --bk.note.t <= 0) bk.note = null;
+    // cercle mobile (il repart toujours du centre)
+    if (bk.move) {
+      bk.moveT++;
+      const w = Math.sin(bk.moveT * BK.MOVE_SPEED);
+      if (bk.move === 'x') bk.hx = w * BK.MOVE_X;
+      else { bk.hx *= 0.9; bk.hy = BK.HY + w * BK.MOVE_Y; }
+    }
     updateParticles();
     if (bk.phase === 'intro') {
       if (bk.t > 100) { bk.phase = 'aim'; bk.t = 0; }
@@ -4006,7 +4021,12 @@
           bk.passed = bk.made >= BK.NEED;
           Audio2.stopMusic();
           if (bk.passed) Audio2.flagSfx();
-          else { Audio2.hurtSfx(); buzz([40, 40, 80]); }
+          else {
+            // pas assez de paniers : on perd des points (jamais sous zéro), puis on continue
+            bk.penalty = Math.min(score, (BK.NEED - bk.made) * BK.PENALTY);
+            score -= bk.penalty;
+            Audio2.hurtSfx(); buzz([40, 40, 80]);
+          }
         } else {
           resetBasketBall();
           bk.phase = 'aim'; bk.t = 0;
@@ -4014,16 +4034,10 @@
       }
     } else if (bk.phase === 'end') {
       if (bk.t > 150) {
-        if (bk.passed) {
-          basket = null;
-          levelIndex++;
-          checkpointReached = false;
-          beginIntro();
-        } else {
-          lives--;
-          if (lives <= 0) { basket = null; gameOver(); return; }
-          beginBasket(true);
-        }
+        basket = null;
+        levelIndex++;
+        checkpointReached = false;
+        beginIntro();
       }
     }
   }
@@ -4129,18 +4143,19 @@
     drawLauburu(wr.x - 22, shoulder.y + 18, 7);
 
     // support du panneau, fixé au fronton
-    const s1 = bkProj(0, BK.HY + 30, BK.BZ), s2 = bkProj(0, BK.HY + 30, BK.WALL);
+    const hx = bk.hx, hy = bk.hy;
+    const s1 = bkProj(hx, hy + 30, BK.BZ), s2 = bkProj(hx, hy + 30, BK.WALL);
     ctx.fillStyle = '#555a66';
     ctx.fillRect(s1.x - 3, s2.y, 6, s1.y - s2.y + 3);
     // panneau
-    const b1 = bkProj(-80, BK.HY + 120, BK.BZ), b2 = bkProj(80, BK.HY - 20, BK.BZ);
+    const b1 = bkProj(hx - 80, hy + 120, BK.BZ), b2 = bkProj(hx + 80, hy - 20, BK.BZ);
     ctx.fillStyle = 'rgba(20,10,30,0.85)';
     ctx.fillRect(b1.x, b1.y, b2.x - b1.x, b2.y - b1.y);
     ctx.save();
     ctx.shadowColor = 'rgba(127,255,212,0.9)'; ctx.shadowBlur = 8;
     ctx.strokeStyle = '#7fffd4'; ctx.lineWidth = 2.5;
     ctx.strokeRect(b1.x, b1.y, b2.x - b1.x, b2.y - b1.y);
-    const q1 = bkProj(-26, BK.HY + 50, BK.BZ), q2 = bkProj(26, BK.HY + 2, BK.BZ);
+    const q1 = bkProj(hx - 26, hy + 50, BK.BZ), q2 = bkProj(hx + 26, hy + 2, BK.BZ);
     ctx.strokeStyle = '#ff2fa0'; ctx.shadowColor = 'rgba(255,47,160,0.9)';
     ctx.strokeRect(q1.x, q1.y, q2.x - q1.x, q2.y - q1.y);
     ctx.restore();
@@ -4150,7 +4165,7 @@
     const sh = bkProj(b.x, 0, b.z);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(sh.x, sh.y, BK.BALL * sh.s, BK.BALL * sh.s * 0.35, 0, 0, Math.PI * 2); ctx.fill();
-    const inHoop = Math.hypot(b.x, b.z - BK.HZ) < BK.RIM + BK.BALL && b.y < BK.HY + BK.BALL;
+    const inHoop = Math.hypot(b.x - hx, b.z - BK.HZ) < BK.RIM + BK.BALL && b.y < hy + BK.BALL;
     const behind = b.z > BK.HZ || inHoop;
     drawRim('back');
     if (behind) drawBasketBall(b);
@@ -4189,7 +4204,7 @@
     const a0 = half === 'back' ? 0 : Math.PI, a1 = a0 + Math.PI;
     for (let i = 0; i <= 20; i++) {
       const a = a0 + (a1 - a0) * i / 20;
-      const q = bkProj(Math.cos(a) * BK.RIM, BK.HY, BK.HZ + Math.sin(a) * BK.RIM);
+      const q = bkProj(basket.hx + Math.cos(a) * BK.RIM, basket.hy, BK.HZ + Math.sin(a) * BK.RIM);
       if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
     }
     ctx.stroke();
@@ -4199,21 +4214,22 @@
   // filet : fils du cercle vers un petit cercle plus bas ; il s'étire quand un panier passe
   function drawNet() {
     const stretch = basket.net > 0 ? Math.sin(basket.net / 30 * Math.PI) * 18 : 0;
-    const lowY = BK.HY - 48 - stretch, lowR = BK.RIM * 0.55;
+    const hx = basket.hx, hy = basket.hy;
+    const lowY = hy - 48 - stretch, lowR = BK.RIM * 0.55;
     ctx.strokeStyle = 'rgba(245,240,230,0.85)'; ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      const top = bkProj(Math.cos(a) * BK.RIM, BK.HY, BK.HZ + Math.sin(a) * BK.RIM);
+      const top = bkProj(hx + Math.cos(a) * BK.RIM, hy, BK.HZ + Math.sin(a) * BK.RIM);
       const a2 = a + Math.PI / 12;
-      const bot = bkProj(Math.cos(a2) * lowR, lowY, BK.HZ + Math.sin(a2) * lowR);
+      const bot = bkProj(hx + Math.cos(a2) * lowR, lowY, BK.HZ + Math.sin(a2) * lowR);
       ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y);
     }
     for (const f of [0.5, 1]) {
-      const r = BK.RIM + (lowR - BK.RIM) * f, y = BK.HY + (lowY - BK.HY) * f;
+      const r = BK.RIM + (lowR - BK.RIM) * f, y = hy + (lowY - hy) * f;
       for (let i = 0; i <= 16; i++) {
         const a = (i / 16) * Math.PI * 2;
-        const q = bkProj(Math.cos(a) * r, y, BK.HZ + Math.sin(a) * r);
+        const q = bkProj(hx + Math.cos(a) * r, y, BK.HZ + Math.sin(a) * r);
         if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
       }
     }
@@ -4266,6 +4282,15 @@
         ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x - 1, y + 3); ctx.lineTo(x + 4, y - 3); ctx.stroke();
       }
     }
+    // annonce du cercle mobile
+    if (bk.note) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, bk.note.t / 15) * (0.6 + 0.4 * Math.abs(Math.sin(frame * 0.15)));
+      ctx.font = 'bold 14px "Courier New", monospace';
+      ctx.fillStyle = '#ffd400';
+      ctx.fillText(bk.note.txt, W / 2, 118);
+      ctx.restore();
+    }
     // message du dernier tir
     if (bk.msg) {
       ctx.save();
@@ -4284,11 +4309,11 @@
       ctx.font = 'bold 22px "Courier New", monospace';
       ctx.shadowColor = 'rgba(127,255,212,0.9)'; ctx.shadowBlur = 10;
       ctx.fillStyle = '#7fffd4';
-      ctx.fillText(bk.retry ? 'ENCORE UNE FOIS !' : 'BONUS : PANIER !', W / 2, horY + 10);
+      ctx.fillText('BONUS : PANIER !', W / 2, horY + 10);
       ctx.restore();
-      small(BK.NEED + ' paniers sur ' + BK.BALLS + ' ballons', horY + 38, '#ffd400');
-      small('pour passer à Anglet.', horY + 56, '#ffd400');
-      small('Sinon : -1 ♥', horY + 76, '#ff5566');
+      small(BK.NEED + ' paniers sur ' + BK.BALLS + ' ballons.', horY + 38, '#ffd400');
+      small('Chaque panier fait bouger le cercle !', horY + 56, '#ffd400');
+      small('Sinon : -' + BK.PENALTY + ' pts par panier manquant', horY + 76, '#ff5566');
     } else if (bk.phase === 'aim' && bk.shot === 0 && !bk.drag) {
       // démonstration du geste : un doigt qui glisse vers le haut
       const o = bkProj(BK.X0, BK.Y0, BK.Z0);
@@ -4310,7 +4335,7 @@
       ctx.shadowColor = col; ctx.shadowBlur = 12; ctx.fillStyle = col;
       ctx.fillText(bk.passed ? 'QUALIFIÉ !' : 'RATÉ…', W / 2, horY + 26);
       ctx.restore();
-      small(bk.passed ? 'Direction Anglet !' : (lives > 1 ? '-1 ♥  On recommence !' : '-1 ♥'), horY + 56, '#ffd400');
+      small(!bk.passed && bk.penalty > 0 ? '-' + bk.penalty + ' pts · Direction Anglet' : 'Direction Anglet !', horY + 56, '#ffd400');
     }
     ctx.textAlign = 'left';
   }
@@ -4596,7 +4621,8 @@
       grid() { return level.grid.map((r) => r.join('')); },
       def() { return { cols: level.cols, flag: level.def.flag, checkpoint: level.def.checkpoint, theme: level.theme.key, levels: LEVELS.length, boss: !!level.def.boss, bonusBasket: !!level.def.bonusBasket }; },
       setPaused, isPaused: () => paused,
-      basket() { return basket && { phase: basket.phase, shot: basket.shot, made: basket.made, results: basket.results.slice(), ball: basket.ball }; },
+      basket() { return basket && { phase: basket.phase, shot: basket.shot, made: basket.made, results: basket.results.slice(), ball: basket.ball,
+        hx: basket.hx, hy: basket.hy, move: basket.move, moveT: basket.moveT, penalty: basket.penalty }; },
       beginBasket() { overlay.classList.add('hidden'); beginBasket(); },
       shoot(dx, dy) { return basketShoot(dx, dy); },
       basketConsts: BK,

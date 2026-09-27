@@ -37,7 +37,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 | `grid()` | Niveau en texte, une chaîne par rangée (légende des tuiles dans le code : `# B ? M E X S = R T t p q`) |
 | `def()` / `consts` | Infos du niveau (`cols`, `flag`, `checkpoint`) et constantes (`T`, `GROUND_ROW`, `GROUND_Y`…) |
 | `setPaused(b)` / `isPaused()` / `setCoins(n)` | Pause, et nombre de pièces (pour tester le 1UP) |
-| `beginBasket()` / `basket()` / `shoot(dx, dy)` / `basketConsts` | Mini-jeu du panier : le lancer, lire son état (`phase`, `shot`, `made`, `results`, `ball`), tirer avec un geste en pixels du canvas (`dy` vers le haut ; 225 = tir idéal) |
+| `beginBasket()` / `basket()` / `shoot(dx, dy)` / `basketConsts` | Mini-jeu du panier : le lancer, lire son état (`phase`, `shot`, `made`, `results`, `ball`), tirer avec un geste en pixels du canvas (`dy` vers le haut ; 225 = tir idéal). `hx`/`hy`/`move`/`moveT` : position et mouvement du cercle |
 | `toTitle()` | Revient à l'écran d'accueil (pour tester le passage secret du soleil) |
 | `render()` | Redessine une image. Obligatoire avant chaque capture d'écran quand le panneau est masqué |
 
@@ -70,8 +70,9 @@ Règles de jeu que la suite protège :
   bonus de 1000 par vie restante, feu d'artifice, enregistrement du score, appui ailleurs = nouvelle partie.
   Il doit rester BATTABLE sans triche : un robot qui esquive et saute sur la tête quand il est sonné doit gagner
   (test « boss battable »). Il ne doit jamais coincer le joueur, ni être protégé par une plateforme au-dessus de lui.
-- Mini-jeu du panier après Biarritz : 10 ballons, 3 paniers pour passer à Anglet ; sinon -1 vie et on recommence
-  (game over sur la dernière vie). La manette est masquée pendant l'épreuve, le glissé au doigt lance le ballon,
+- Mini-jeu du panier après Biarritz : 5 ballons, 3 paniers pour le bonus ; sinon -500 pts par panier manquant
+  (sans perdre de vie), et on passe à Anglet dans les deux cas. Après le 1er panier le cercle bouge de gauche à droite,
+  après le 2e de haut en bas ; il doit rester marquable en lançant au bon moment. La manette est masquée pendant l'épreuve, le glissé au doigt lance le ballon,
   un geste trop court rate. Le test « drapeau » attend l'état `basket` après Biarritz.
 - Passage secret : sur l'écran d'accueil, toucher le soleil lance directement le boss (ailleurs : partie normale).
 - Écrans de fin (victoire, game over) : les appuis sont ignorés pendant 1 seconde, pour ne pas perdre son score

@@ -587,15 +587,24 @@
     check('grind 50-50 / nosegrind', seen.fifty > 0 && seen.nose > 0 && avg(pts.fifty) > 0 && avg(pts.nose) > avg(pts.fifty) && !leftover, JSON.stringify(detail));
   });
 
-  // 26. Mini-jeu du panier (entre Biarritz et Anglet) : 10 ballons, 3 paniers pour passer.
-  //     Un bon geste marque, un geste trop court rate ; 3 paniers → Anglet ; échec → -1 vie et on
-  //     recommence ; échec avec la dernière vie → game over. La manette est masquée pendant l'épreuve,
-  //     et le vrai geste au doigt (PointerEvent) lance bien le ballon.
+  // 26. Mini-jeu du panier (entre Biarritz et Anglet) : 5 ballons, 3 paniers pour le bonus.
+  //     Un bon geste marque, un geste trop court rate ; après le 1er panier le cercle bouge
+  //     de gauche à droite, après le 2e de haut en bas (et reste marquable en visant au bon moment) ;
+  //     échec → -500 pts par panier manquant, sans perdre de vie ; dans les deux cas → Anglet.
+  //     La manette est masquée pendant l'épreuve, et le vrai geste au doigt lance bien le ballon.
   safe('panier de basket', () => {
     const problems = [];
-    const shootWait = (dx, dy) => {
-      g.shoot(dx, dy);
-      for (let i = 0; i < 400 && g.basket() && g.basket().phase !== 'aim' && g.basket().phase !== 'end'; i++) g.run(1);
+    const B = g.basketConsts;
+    const fly = () => { for (let i = 0; i < 400 && g.basket() && g.basket().phase !== 'aim' && g.basket().phase !== 'end'; i++) g.run(1); };
+    const shootWait = (dx, dy) => { g.shoot(dx, dy); fly(); };
+    // tir chronométré : on lâche quand le cercle sera revenu au centre à l'arrivée du ballon
+    const timedShot = () => {
+      for (let i = 0; i < 200; i++) {
+        const k = g.basket();
+        if (!k.move || Math.abs(Math.sin((k.moveT + B.FLIGHT) * B.MOVE_SPEED)) < 0.04) break;
+        g.run(1);
+      }
+      shootWait(0, 225);
     };
     const res = {};
     // bon geste / geste trop court
@@ -616,27 +625,37 @@
       res.geste = g.basket().phase;
       if (res.geste !== 'fly') problems.push('le glissé au doigt ne lance pas le ballon');
     } else problems.push('page sans taille : fais resize_window mobile');
-    // réussite : 3 paniers → Anglet
+    // réussite : le cercle bouge après chaque panier, 3 paniers → Anglet
     g.start(0); g.beginBasket(); g.run(101);
-    for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, s < 3 ? 225 : 120);
+    timedShot();
+    const m1 = g.basket(); g.run(30); const m1b = g.basket();
+    res.apres1 = { move: m1.move, bougeX: Math.round(Math.abs(m1b.hx - m1.hx)) };
+    if (m1.move !== 'x' || m1b.hx === m1.hx) problems.push('le cercle ne bouge pas de gauche à droite après le 1er panier');
+    timedShot();
+    const m2 = g.basket(); g.run(30); const m2b = g.basket();
+    res.apres2 = { move: m2.move, bougeY: Math.round(Math.abs(m2b.hy - m2.hy)) };
+    if (m2.move !== 'y' || m2b.hy === m2.hy) problems.push('le cercle ne bouge pas de haut en bas après le 2e panier');
+    timedShot();
+    res.paniers = g.basket().made;
+    if (g.basket().made < 3) problems.push('3e panier (cercle mobile) impossible même bien chronométré');
+    for (let s = 0; s < 5 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
     g.run(200);
     res.reussite = { niveau: g.info().levelIndex, etat: g.info().state, vies: g.info().lives };
     if (g.info().levelIndex !== 1 || g.info().lives !== 3) problems.push('3 paniers ne mènent pas à Anglet');
     if (getComputedStyle(document.getElementById('pad')).visibility === 'hidden') problems.push('manette toujours masquée après le panier');
-    // échec : -1 vie et on recommence ; fin anticipée quand 3 paniers deviennent impossibles
+    // échec : des points en moins, pas de vie perdue, on continue vers Anglet ; fin anticipée
     g.start(0); g.beginBasket(); g.run(101);
-    for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
+    for (let s = 0; s < 5 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
     res.tirsAvantFin = g.basket().shot;
-    g.run(200);
-    res.echec = { vies: g.info().lives, etat: g.info().state, niveau: g.info().levelIndex };
-    if (g.info().lives !== 2 || g.info().state !== 'basket' || g.basket().shot !== 0) problems.push("un échec ne coûte pas une vie / ne relance pas l'épreuve");
-    // échec avec la dernière vie → game over
+    // avec un score de 0, la pénalité est plafonnée à 0 : on vérifie sur une partie avec des points
     g.start(0); g.beginBasket(); g.run(101);
-    while (g.info().lives > 1) { for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, 120); g.run(200); g.run(101); }
-    for (let s = 0; s < 10 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
+    shootWait(0, 225);
+    for (let s = 0; s < 5 && g.basket().phase !== 'end'; s++) shootWait(0, 120);
+    const sc = g.info().score, pen = g.basket().penalty;
     g.run(200);
-    res.derniereVie = g.info().state;
-    if (g.info().state !== 'over') problems.push('échec sans vie restante : pas de game over');
+    res.echec = { penalite: pen, score: sc, vies: g.info().lives, niveau: g.info().levelIndex, etat: g.info().state };
+    if (res.tirsAvantFin !== 3) problems.push('pas de fin anticipée quand 3 paniers deviennent impossibles');
+    if (pen <= 0 || g.info().lives !== 3 || g.info().levelIndex !== 1) problems.push("un échec ne retire pas de points, ou coûte une vie, ou ne mène pas à Anglet");
     check('panier de basket', problems.length === 0, problems.length ? problems.join(' ; ') + ' ' + JSON.stringify(res) : JSON.stringify(res));
   });
 
