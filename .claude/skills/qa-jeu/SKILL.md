@@ -75,7 +75,7 @@ Règles de jeu que la suite protège :
   après le 2e de haut en bas ; il doit rester marquable en lançant au bon moment. La manette est masquée pendant l'épreuve, le glissé au doigt lance le ballon,
   un geste trop court rate. Le test « drapeau » attend l'état `basket` après Biarritz.
 - Lunettes roses : elles tournent au milieu de l'accueil ; au START elles volent jusqu'au visage du joueur
-  (éclair + « STYLÉ ! »), puis il les porte en jeu. `glassesFx()` / `startFromTitle()` dans l'API de debug.
+  (éclair + « SAPAR ! »), puis il les porte en jeu. `glassesFx()` / `startFromTitle()` dans l'API de debug.
 - Passage secret : sur l'écran d'accueil, toucher le soleil lance directement le boss (ailleurs : partie normale).
 - Écrans de fin (victoire, game over) : les appuis sont ignorés pendant 1 seconde, pour ne pas perdre son score
   en tapant encore sur SAUT.
