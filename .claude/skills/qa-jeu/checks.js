@@ -11,6 +11,32 @@
   const release = () => ['left', 'right', 'jump', 'trick'].forEach((k) => g.release(k));
   const safe = (name, fn) => { try { fn(); } catch (e) { check(name, false, 'exception : ' + e.message); } release(); };
 
+  // 0. Lunettes roses (en premier : les écrans de fin testés plus loin remplacent l'accueil) : elles tournent sur l'accueil (canvas #titleGlasses non vide), puis au START
+  //     elles volent jusqu'au visage (glassesFx) avant que la partie commence, et l'intro finit bien.
+  safe('lunettes', () => {
+    const problems = [];
+    const res = {};
+    const tc = document.getElementById('titleGlasses');
+    if (tc && tc.isConnected) {
+      g.toTitle(); g.run(2); g.render();
+      const d = tc.getContext('2d').getImageData(0, 0, tc.width, tc.height).data;
+      let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+      res.pixelsAccueil = n;
+      if (n < 2000) problems.push("lunettes absentes de l'accueil");
+    } else res.accueil = "remplacé par un écran de fin (test sauté)";
+    g.startFromTitle();
+    const fx0 = g.glassesFx();
+    g.run(40); const mid = g.glassesFx();
+    g.run(60); const after = g.glassesFx();
+    res.vol = { debut: fx0 && fx0.t, milieu: mid && mid.t, apres: after && after.t, duree: fx0 && fx0.len };
+    if (!fx0 || !mid || mid.t <= fx0.t) problems.push('pas de vol des lunettes au START');
+    if (g.info().state !== 'intro') problems.push("l'intro s'arrête avant la fin du vol");
+    g.run(200);
+    res.etat = g.info().state;
+    if (g.info().state !== 'playing' || g.glassesFx() !== null) problems.push("la partie ne démarre pas après l'effet");
+    check('lunettes', problems.length === 0, problems.length ? problems.join(' ; ') + ' ' + JSON.stringify(res) : JSON.stringify(res));
+  });
+
   // 1. Hauteur de saut : sur place et avec élan (les poubelles de 4 tuiles = 120 px)
   safe('saut', () => {
     g.start(0);

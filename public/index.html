@@ -184,6 +184,20 @@
     box-sizing: border-box;
     z-index: 30;
   }
+  /* lunettes roses qui tournent au milieu de l'accueil, entre le titre et START */
+  #titleGlasses {
+    display: block;
+    width: min(100%, calc(20vh * 440 / 170));
+    height: auto;
+    margin: -6px auto 2px;
+    pointer-events: none;
+    /* pas le cadre néon des canvas du jeu */
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    image-rendering: auto;
+  }
   #overlay h1 {
     color: #ff2fa0;
     font-size: clamp(30px, 11vw, 48px); font-size: clamp(22px, 11.6cqw, 48px);
@@ -598,6 +612,7 @@
   <div id="overlay">
     <h1>Trash<span>GO</span></h1>
     <p class="tagline">SUPER TRASH WORLD</p>
+    <canvas id="titleGlasses" width="440" height="170" aria-hidden="true"></canvas>
     <div class="menuButtons">
       <button id="btnStart" type="button">START</button>
       <button id="btnScores" type="button">TOP 10</button>
@@ -1297,15 +1312,27 @@
   // ================================================================
   function startGame(startLevel) {
     Audio2.resume();
+    let from = { x: W / 2, y: canvas.height / 2, size: TITLE_GLASSES_SIZE };
+    try {
+      const r = titleGlassesCanvas.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
+      if (titleGlassesCanvas.isConnected && r.width && cr.width) {
+        from = { x: (r.left + r.width / 2 - cr.left) * W / cr.width,
+                 y: (r.top + r.height / 2 - cr.top) * canvas.height / cr.height,
+                 size: TITLE_GLASSES_SIZE * (r.width / titleGlassesCanvas.width) * (W / cr.width) };
+      }
+    } catch (e) {}
     score = 0; coinCount = 0; lives = 3; levelIndex = startLevel || 0;
     player.big = false;
     checkpointReached = false;
     overlay.classList.add('hidden');
     beginIntro();
+    glassesFx = { t: 0, a0: titleGlassesAngle(), from };
+    stateTimer = 210;
   }
 
   function beginIntro() {
     setBasketMode(false);
+    glassesFx = null;
     state = 'intro';
     stateTimer = 150;
     Audio2.stopMusic();
@@ -3631,6 +3658,7 @@
       ctx.rotate(lean);
       ctx.translate(-SPR.w / 2 * kx, -SPR.hip * ky);
       ctx.drawImage(charImg, 0, 0, SPR.w, SPR.hip + 1, 0, 0, drawW, (SPR.hip + 1) * ky);
+      drawWornGlasses(kx, ky);
       ctx.restore();
     } else {
       ctx.fillStyle = '#ff2fa0';
@@ -3781,6 +3809,144 @@
     }
   }
 
+  // ================================================================
+  //  LUNETTES ROSES (celles du joueur) : monture rose bonbon épaisse,
+  //  verres miroir foncés, rivets argentés, branches épaisses.
+  //  Petit modèle 3D : la face est un plan, les branches partent vers l'arrière ;
+  //  on les fait tourner autour de l'axe vertical avec une légère perspective.
+  // ================================================================
+  const GL = { W: 240, P: 700 };  // largeur de la face (unités du modèle), distance de perspective
+  function roundRectPts(x0, y0, x1, y1, rtl, rtr, rbr, rbl) {
+    const pts = [];
+    const arc = (cx, cy, r, a0, a1) => { for (let i = 0; i <= 6; i++) { const a = a0 + (a1 - a0) * i / 6; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } };
+    arc(x0 + rtl, y0 + rtl, rtl, Math.PI, Math.PI * 1.5);
+    arc(x1 - rtr, y0 + rtr, rtr, Math.PI * 1.5, Math.PI * 2);
+    arc(x1 - rbr, y1 - rbr, rbr, 0, Math.PI * 0.5);
+    arc(x0 + rbl, y1 - rbl, rbl, Math.PI * 0.5, Math.PI);
+    return pts;
+  }
+  // contour de la face : bords extérieurs arrondis, échancrure pour le nez entre les verres
+  const GL_OUTER = (() => {
+    const pts = [];
+    const arc = (cx, cy, r, a0, a1) => { for (let i = 0; i <= 6; i++) { const a = a0 + (a1 - a0) * i / 6; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } };
+    arc(-110, -28, 10, Math.PI, Math.PI * 1.5);          // coin haut gauche
+    arc(110, -28, 10, Math.PI * 1.5, Math.PI * 2);       // coin haut droit
+    arc(98, 16, 22, 0, Math.PI * 0.5);                   // coin bas droit
+    pts.push([24, 38]); pts.push([14, 12]); pts.push([0, 6]); pts.push([-14, 12]); pts.push([-24, 38]); // pont
+    arc(-98, 16, 22, Math.PI * 0.5, Math.PI);            // coin bas gauche
+    return pts;
+  })();
+  const GL_LENS_L = roundRectPts(-106, -26, -18, 28, 7, 7, 16, 14);
+  const GL_LENS_R = GL_LENS_L.map(([x, y]) => [-x, y]).reverse();
+
+  // g : contexte 2D ; (cx, cy) : centre ; size : largeur de la face à l'écran ; ang : rotation (rad)
+  function drawGlasses(g, cx, cy, size, ang, glow) {
+    const k = size / GL.W, c = Math.cos(ang), sn = Math.sin(ang);
+    const proj = (x, y, z) => {
+      const X = x * c + z * sn, D = -x * sn + z * c;   // D > 0 : vers nous
+      const f = GL.P / (GL.P - D);
+      return [cx + X * f * k, cy + y * f * k, D];
+    };
+    const path = (pts) => { pts.forEach(([x, y], i) => { const q = proj(x, y, 0); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); };
+    // branches : de la charnière vers l'arrière, légèrement coudées vers le bas au bout
+    const temple = (side) => {
+      const hx = side * 116, L = 210;
+      const a = proj(hx, -22, 0), b = proj(hx, -18, -L * 0.72), e = proj(hx, 0, -L);
+      return { a, b, e, depth: (a[2] + e[2]) / 2 };
+    };
+    const temples = [temple(-1), temple(1)];
+    const drawTemple = (t) => {
+      g.save();
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      g.strokeStyle = '#e888b1'; g.lineWidth = Math.max(1.5, 11 * k);
+      g.beginPath(); g.moveTo(t.a[0], t.a[1]); g.lineTo(t.b[0], t.b[1]); g.lineTo(t.e[0], t.e[1]); g.stroke();
+      g.strokeStyle = 'rgba(255,214,232,0.7)'; g.lineWidth = Math.max(0.6, 3 * k);
+      g.beginPath(); g.moveTo(t.a[0], t.a[1] - 3 * k); g.lineTo(t.b[0], t.b[1] - 3 * k); g.stroke();
+      g.restore();
+    };
+    temples.filter((t) => t.depth < 0).forEach(drawTemple);
+    // face : monture (contour moins les verres), puis verres miroir
+    const top = proj(0, -38, 0)[1], bot = proj(0, 38, 0)[1];
+    const frameGrad = g.createLinearGradient(0, top, 0, bot);
+    const back = c < 0; // vue de dos : un peu plus sombre
+    frameGrad.addColorStop(0, back ? '#f0a8c8' : '#ffc6de');
+    frameGrad.addColorStop(0.45, back ? '#e48ab2' : '#f7a1c4');
+    frameGrad.addColorStop(1, back ? '#c86f96' : '#dc7ea6');
+    g.save();
+    if (glow) { g.shadowColor = 'rgba(255,47,160,0.75)'; g.shadowBlur = glow; }
+    g.fillStyle = frameGrad;
+    g.beginPath(); path(GL_OUTER); path(GL_LENS_L); path(GL_LENS_R);
+    g.fill('evenodd');
+    g.restore();
+    for (const lens of [GL_LENS_L, GL_LENS_R]) {
+      const lg = g.createLinearGradient(0, proj(0, -26, 0)[1], 0, proj(0, 28, 0)[1]);
+      lg.addColorStop(0, '#0e131c');
+      lg.addColorStop(0.55, '#26303f');
+      lg.addColorStop(1, '#4d5d70');
+      g.fillStyle = lg;
+      g.beginPath(); path(lens); g.fill();
+      // reflet miroir qui glisse sur le verre quand les lunettes tournent
+      g.save();
+      g.beginPath(); path(lens); g.clip();
+      const off = sn * 60;
+      g.fillStyle = 'rgba(190,215,255,0.16)';
+      g.beginPath();
+      const r1 = proj(-130 + off, -30, 0), r2 = proj(-108 + off, -30, 0), r3 = proj(-48 + off, 30, 0), r4 = proj(-70 + off, 30, 0);
+      g.moveTo(r1[0], r1[1]); g.lineTo(r2[0], r2[1]); g.lineTo(r3[0], r3[1]); g.lineTo(r4[0], r4[1]); g.closePath(); g.fill();
+      const r5 = proj(30 + off, -30, 0), r6 = proj(40 + off, -30, 0), r7 = proj(80 + off, 30, 0), r8 = proj(70 + off, 30, 0);
+      g.moveTo(r5[0], r5[1]); g.lineTo(r6[0], r6[1]); g.lineTo(r7[0], r7[1]); g.lineTo(r8[0], r8[1]); g.closePath(); g.fill();
+      g.restore();
+    }
+    // liseré clair en haut de la monture, et rivets argentés aux charnières
+    g.strokeStyle = 'rgba(255,228,240,0.8)'; g.lineWidth = Math.max(0.6, 2.5 * k);
+    g.beginPath();
+    const t1 = proj(-104, -34, 0), t2 = proj(104, -34, 0);
+    g.moveTo(t1[0], t1[1]); g.lineTo(t2[0], t2[1]); g.stroke();
+    if (!back) {
+      for (const sx of [-1, 1]) {
+        const q = proj(sx * 112, -24, 0);
+        g.fillStyle = '#e8ecf2';
+        g.beginPath(); g.arc(q[0], q[1], Math.max(0.7, 3.2 * k * Math.abs(c)), 0, Math.PI * 2); g.fill();
+      }
+    }
+    temples.filter((t) => t.depth >= 0).forEach(drawTemple);
+  }
+
+  // accueil : les lunettes tournent au milieu, en fond
+  const titleGlassesCanvas = document.getElementById('titleGlasses');
+  const titleGlassesCtx = titleGlassesCanvas.getContext('2d');
+  const TITLE_GLASSES_SIZE = 200;
+  const titleGlassesAngle = () => frame * 0.03;
+  function drawTitleGlasses() {
+    if (!titleGlassesCanvas.isConnected || overlay.classList.contains('hidden')) return;
+    const g = titleGlassesCtx, cw = titleGlassesCanvas.width, ch = titleGlassesCanvas.height;
+    g.clearRect(0, 0, cw, ch);
+    g.globalAlpha = 0.9;
+    drawGlasses(g, cw / 2, ch / 2 + Math.sin(frame * 0.04) * 6, TITLE_GLASSES_SIZE, titleGlassesAngle(), 18);
+    g.globalAlpha = 1;
+  }
+
+  // Au START : les lunettes de l'accueil s'envolent en tournant jusqu'au visage du joueur.
+  const GLASSES_FX_LEN = 80;   // durée du vol (images)
+  let glassesFx = null;        // { t, a0 } pendant l'intro qui suit START
+  // personnage de l'intro (grand) : position des yeux dans l'image source
+  const INTRO_K = 0.9, EYES_SRC = { x: 21.5, y: 22 }, GLASSES_ON_FACE = 22;
+
+  // en jeu : petites lunettes posées sur les yeux du sprite (repère de l'image source × kx, ky)
+  function drawWornGlasses(kx, ky) {
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#f7a1c4';
+    ctx.fillRect(12 * kx, 18.5 * ky, 20.5 * kx, 7 * ky);
+    ctx.fillStyle = '#1b2230';
+    ctx.fillRect(13.3 * kx, 20 * ky, 6.4 * kx, 4.2 * ky);
+    ctx.fillRect(23.4 * kx, 20 * ky, 7.4 * kx, 4.2 * ky);
+    ctx.fillStyle = 'rgba(190,215,255,0.6)';
+    ctx.fillRect(14 * kx, 20.3 * ky, 1.6 * kx, 1.4 * ky);
+    ctx.fillRect(24.2 * kx, 20.3 * ky, 1.6 * kx, 1.4 * ky);
+    ctx.restore();
+  }
+
   // écran d'intro "WORLD 1-1" façon Mario, aux couleurs néon
   function drawIntro() {
     ctx.fillStyle = '#0d0d12';
@@ -3796,13 +3962,49 @@
     ctx.fillStyle = '#7fffd4';
     ctx.fillText(level.theme.name, W / 2, H * 0.36 + 34);
     ctx.restore();
+    const cw = SPR.w * INTRO_K, chh = SPR.h * INTRO_K;
+    const cx0 = W / 2 - 58, cy0 = H * 0.475;
     if (charImg.complete && charImg.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(charImg, W / 2 - 46, H * 0.5, 26, 44);
+      ctx.drawImage(charImg, cx0, cy0, cw, chh);
     }
     ctx.font = 'bold 20px "Courier New", monospace';
     ctx.fillStyle = '#ffd400';
-    ctx.fillText('× ' + lives, W / 2 + 18, H * 0.5 + 30);
+    ctx.fillText('× ' + lives, W / 2 + 34, cy0 + chh * 0.5);
+    // lunettes : en vol depuis le centre de l'écran (juste après START), sinon déjà sur le nez
+    const ex = cx0 + EYES_SRC.x * INTRO_K, ey = cy0 + EYES_SRC.y * INTRO_K;
+    ctx.textAlign = 'left';
+    if (glassesFx && glassesFx.t < GLASSES_FX_LEN) {
+      const p = glassesFx.t / GLASSES_FX_LEN;
+      const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;   // accélère puis freine
+      const a1 = Math.ceil(glassesFx.a0 / (Math.PI * 2) + 1) * Math.PI * 2; // au moins un tour, finit de face
+      const f = glassesFx.from;
+      const gx = f.x + (ex - f.x) * e;
+      const gy = f.y + (ey - f.y) * e - Math.sin(p * Math.PI) * 60;
+      drawGlasses(ctx, gx, gy, f.size + (GLASSES_ON_FACE - f.size) * e, glassesFx.a0 + (a1 - glassesFx.a0) * e, 16 * (1 - e) + 2);
+    } else {
+      drawGlasses(ctx, ex, ey, GLASSES_ON_FACE, 0, 0);
+    }
+    // « clic » : éclair et étincelles quand les lunettes se posent
+    if (glassesFx && glassesFx.t >= GLASSES_FX_LEN && glassesFx.t < GLASSES_FX_LEN + 45) {
+      const q = (glassesFx.t - GLASSES_FX_LEN) / 45;
+      ctx.save();
+      ctx.globalAlpha = 1 - q;
+      ctx.strokeStyle = '#ff2fa0'; ctx.lineWidth = 3;
+      ctx.shadowColor = 'rgba(255,47,160,0.9)'; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(ex, ey, 10 + q * 40, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#ffd400';
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + 0.3, r = 16 + q * 34;
+        ctx.fillRect(ex + Math.cos(a) * r - 2, ey + Math.sin(a) * r - 2, 4, 4);
+      }
+      ctx.font = 'bold 16px "Courier New", monospace';
+      ctx.fillStyle = '#7fffd4'; ctx.shadowColor = 'rgba(127,255,212,0.9)';
+      ctx.textAlign = 'center';
+      ctx.fillText('STYLÉ !', W / 2 + 62, cy0 + chh * 0.5 + 34 + q * 6);
+      ctx.restore();
+    }
+    ctx.textAlign = 'center';
     if (level.def.boss) {
       ctx.font = 'bold 13px "Courier New", monospace';
       ctx.fillStyle = '#ff2fa0';
@@ -4416,7 +4618,11 @@
     else if (state === 'clear') updateClear();
     else if (state === 'basket') updateBasket();
     else if (state === 'intro') {
-      if (--stateTimer <= 0) startPlaying();
+      if (glassesFx) {
+        glassesFx.t++;
+        if (glassesFx.t === GLASSES_FX_LEN) Audio2.powerSfx();
+      }
+      if (--stateTimer <= 0) { glassesFx = null; startPlaying(); }
     } else if (state === 'won') {
       updateFireworks();
     } else {
@@ -4431,7 +4637,7 @@
     while (acc >= STEP) { step(); acc -= STEP; }
 
     ctx.clearRect(0, 0, W, canvas.height);
-    if (state === 'ready') drawTitleBackdrop();
+    if (state === 'ready') { drawTitleBackdrop(); drawTitleGlasses(); }
     else if (state === 'intro') drawIntro();
     else if (state === 'basket') drawBasket();
     else drawWorld();
@@ -4592,7 +4798,7 @@
       run(n) { for (let i = 0; i < n; i++) step(); },
       render() {
         ctx.clearRect(0, 0, W, canvas.height);
-        if (state === 'ready') drawTitleBackdrop(); else if (state === 'intro') drawIntro(); else if (state === 'basket') drawBasket(); else drawWorld();
+        if (state === 'ready') { drawTitleBackdrop(); drawTitleGlasses(); } else if (state === 'intro') drawIntro(); else if (state === 'basket') drawBasket(); else drawWorld();
         updateHud();
       },
       info() { return { state, levelIndex, score, coinCount, lives, timeLeft, big: player.big, x: Math.round(player.x), y: Math.round(player.y), onGround: player.onGround, grinding, grindStyle, camX: Math.round(camX), enemies: enemies.length }; },
@@ -4626,6 +4832,8 @@
       beginBasket() { overlay.classList.add('hidden'); beginBasket(); },
       shoot(dx, dy) { return basketShoot(dx, dy); },
       basketConsts: BK,
+      glassesFx: () => glassesFx && { t: glassesFx.t, len: GLASSES_FX_LEN },
+      startFromTitle() { startGame(); },
       toTitle() { state = 'ready'; overlay.classList.remove('hidden'); level = buildLevel(0); },
       setCoins(n) { coinCount = n; },
       consts: { T, ROWS, LEVEL_Y, GROUND_ROW, GROUND_Y }

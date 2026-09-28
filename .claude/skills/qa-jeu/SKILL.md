@@ -43,7 +43,7 @@ n'est donc pas forcément un bug. On pilote le jeu avec `window.__tg` au lieu d'
 
 ## 3. Suite de tests automatisés
 
-La suite est dans `checks.js`, à côté de ce fichier. Elle contient 26 tests qui repartent chacun
+La suite est dans `checks.js`, à côté de ce fichier. Elle contient 27 tests qui repartent chacun
 d'une partie neuve. Pour l'exécuter :
 
 1. Copie le script dans le dossier servi : `cp .claude/skills/qa-jeu/checks.js public/__qa_checks_tmp.js`.
@@ -74,6 +74,8 @@ Règles de jeu que la suite protège :
   (sans perdre de vie), et on passe à Anglet dans les deux cas. Après le 1er panier le cercle bouge de gauche à droite,
   après le 2e de haut en bas ; il doit rester marquable en lançant au bon moment. La manette est masquée pendant l'épreuve, le glissé au doigt lance le ballon,
   un geste trop court rate. Le test « drapeau » attend l'état `basket` après Biarritz.
+- Lunettes roses : elles tournent au milieu de l'accueil ; au START elles volent jusqu'au visage du joueur
+  (éclair + « STYLÉ ! »), puis il les porte en jeu. `glassesFx()` / `startFromTitle()` dans l'API de debug.
 - Passage secret : sur l'écran d'accueil, toucher le soleil lance directement le boss (ailleurs : partie normale).
 - Écrans de fin (victoire, game over) : les appuis sont ignorés pendant 1 seconde, pour ne pas perdre son score
   en tapant encore sur SAUT.
@@ -116,7 +118,7 @@ Vérifie :
 ## 6. Rapport
 
 Termine par un résumé en français, dans cet ordre :
-- le résultat de la suite (X/26, avec le détail des échecs) ;
+- le résultat de la suite (X/27, avec le détail des échecs) ;
 - les contrôles visuels faits, avec une capture si quelque chose a changé ;
 - les bugs corrigés, avec `fichier:ligne` ;
 - ce qui n'a pas pu être vérifié.

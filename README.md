@@ -7,6 +7,8 @@ horizontal façon Super Mario.
 
 ## Le jeu
 
+- **Les lunettes roses** du skateur tournent au milieu de l'accueil ; au START, elles s'envolent
+  jusqu'à son visage et il les garde pendant toute la partie.
 - **Mini-jeu du panier** entre Biarritz et Anglet : un panier de basket accroché à un fronton,
   5 ballons, il faut en marquer 3 (sinon -500 points par panier manquant). Après le 1er panier
   le cercle bouge de gauche à droite, après le 2e de haut en bas. On lance en
