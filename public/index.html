@@ -1971,7 +1971,7 @@
 
     // ---- pièces ----
     for (const c of coins) {
-      c.spin += 0.12;
+      c.spin += 0.08; // un tour complet en ~1,3 s
       if (!c.taken && Math.abs(player.x + player.w / 2 - c.x) < player.w / 2 + c.r && Math.abs(player.y + player.h / 2 - c.y) < player.h / 2 + c.r) {
         c.taken = true;
         addCoin();
@@ -3461,33 +3461,48 @@
   // ================================================================
   //  DESSIN : entités
   // ================================================================
+  // Pièce éclair (TrashGO) : disque doré, anneau jaune vif, gros éclair clair au centre.
+  // Elle tourne sur elle-même autour de l'axe vertical : la face s'aplatit, la tranche
+  // apparaît de profil, et on voit l'éclair à l'envers quand c'est l'autre face.
+  // dessinée un peu plus grande que sa zone de ramassage (c.r = 8) pour que l'éclair se lise
+  const COIN_DRAW_R = 10;
+  const COIN_BOLT = [[0.2, -0.64], [-0.38, 0.1], [-0.03, 0.1], [-0.22, 0.64], [0.4, -0.12], [0.05, -0.12]];
   function drawCoin(x, y, r, spin) {
-    const bob = Math.sin(spin * 0.6) * 2;
-    const cy = y + bob;
+    const cy = y + Math.sin(spin * 0.6) * 2;
+    const c = Math.cos(spin), sn = Math.sin(spin);
+    const th = r * 0.3;                 // épaisseur de la pièce
+    const off = sn * th / 2;            // décalage entre la face avant et la face arrière
+    const fx = Math.abs(c) < 0.02 ? (c < 0 ? -0.02 : 0.02) : c;
     ctx.save();
     ctx.shadowColor = '#ffd400';
     ctx.shadowBlur = 10;
-    const squish = Math.max(0.35, Math.abs(Math.cos(spin)));
-    ctx.fillStyle = '#ffe066';
-    ctx.beginPath();
-    ctx.ellipse(x, cy, r * squish, r, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#c79a00';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    // éclair au centre (pièce TrashGO)
+    // tranche : face arrière + bande entre les deux faces (or sombre, stries)
+    ctx.fillStyle = '#9a6400';
+    ctx.beginPath(); ctx.ellipse(x - off, cy, r * Math.abs(c), r, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(Math.min(x - off, x + off), cy - r, Math.abs(off * 2), r * 2);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#7a5200';
-    const rw = r * squish * 0.55, rh = r * 0.7;
+    if (Math.abs(off) > 0.6) {
+      ctx.fillStyle = '#d99a14';
+      for (let k = -3; k <= 3; k++) ctx.fillRect(Math.min(x - off, x + off), cy + k * r * 0.26 - 0.5, Math.abs(off * 2), 1);
+    }
+    // face avant (écrasée horizontalement, miroir quand on voit le dos)
+    ctx.translate(x + off, cy);
+    ctx.scale(fx, 1);
+    ctx.fillStyle = '#c38a00';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    // anneau jaune vif, avec un filet plus sombre à l'intérieur
+    ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = r * 0.17;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#9c6a00'; ctx.lineWidth = r * 0.07;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.76, 0, Math.PI * 2); ctx.stroke();
+    // éclair : jaune clair, bord sombre, reflet blanc sur le haut
     ctx.beginPath();
-    ctx.moveTo(x + rw * 0.35, cy - rh);
-    ctx.lineTo(x - rw * 0.25, cy + rh * 0.15);
-    ctx.lineTo(x + rw * 0.05, cy + rh * 0.15);
-    ctx.lineTo(x - rw * 0.35, cy + rh);
-    ctx.lineTo(x + rw * 0.35, cy - rh * 0.05);
-    ctx.lineTo(x + rw * 0.02, cy - rh * 0.05);
+    COIN_BOLT.forEach(([bx, by], i) => { if (i) ctx.lineTo(bx * r, by * r); else ctx.moveTo(bx * r, by * r); });
     ctx.closePath();
-    ctx.fill();
+    ctx.fillStyle = '#ffe36a'; ctx.fill();
+    ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = Math.max(0.6, r * 0.06); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,250,210,0.9)';
+    ctx.beginPath(); ctx.moveTo(0.2 * r, -0.64 * r); ctx.lineTo(-0.14 * r, -0.12 * r); ctx.lineTo(0.02 * r, -0.12 * r); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
 
@@ -3788,7 +3803,7 @@
       ctx.strokeRect(-6, -6, 12, 12);
       ctx.restore();
     }
-    for (const p of popCoins) drawCoin(p.x, p.y, 8, frame * 0.5);
+    for (const p of popCoins) drawCoin(p.x, p.y, COIN_DRAW_R, frame * 0.4);
     ctx.font = 'bold 13px "Courier New", monospace';
     ctx.textAlign = 'center';
     for (const t of floatingTexts) {
@@ -3810,7 +3825,7 @@
     drawFlag();
     drawTiles();
     drawFlames();
-    for (const c of coins) if (c.x > camX - 20 && c.x < camX + W + 20) drawCoin(c.x, c.y, c.r, c.spin);
+    for (const c of coins) if (c.x > camX - 20 && c.x < camX + W + 20) drawCoin(c.x, c.y, COIN_DRAW_R, c.spin);
     for (const p of powerups) drawPowerup(p);
     for (const e of enemies) {
       if (!e.active) continue;
