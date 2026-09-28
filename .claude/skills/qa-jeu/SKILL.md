@@ -92,7 +92,7 @@ Pour obtenir des captures nettes même quand le panneau est masqué : `start`, `
 Pour agrandir le personnage, copie des zones du canvas dans un canvas temporaire affiché en `position:fixed`, puis supprime-le.
 Vérifie :
 - **Course** : les jambes alternent quand on tient `right` (capture 8 images espacées de 3 frames). À l'arrêt, les jambes sont droites.
-- **Flammes** : grille sur le trottoir, braises + lueur en alerte, grande flamme néon quand elles brûlent.
+- **Flammes** : grille sur le trottoir ; flamme en pixel art (rouge-orangé, cœur blanc, langues qui vacillent) qui grandit par étapes : étincelle puis petite flamme en alerte (avec braises et lueur), boule de feu puis grande flamme de 54 px une fois allumée. Aucun trait au-dessus.
 - **Planche de skate** visible SEULEMENT pendant un grind : à plat sur les deux trucks (50-50) ou inclinée nez sur la barre
   et arrière levé (nosegrind), avec le nom de la figure. Jamais au sol, en l'air ni au crash.
 - **Figures** (automatiques à chaque saut, à tour de rôle) : SALTO (rotation), GRAND ÉCART (jambes écartées), VRILLE (le personnage s'affine puis revient). Il n'y a plus de touche FIGURE.

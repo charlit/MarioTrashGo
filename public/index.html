@@ -3367,33 +3367,93 @@
         grd.addColorStop(1, 'rgba(255,159,26,0)');
         ctx.fillStyle = grd;
         ctx.fillRect(x - 8, y - 22, T + 16, 24);
-        if (frame % 6 < 3) drawFlameShape(x + T / 2, y, 6 + 6 * st.k, 0.5);
+        // petite flamme qui grossit et vacille : on voit venir le danger
+        drawFlameShape(x + T / 2, y, st.k < 0.5 ? 0 : 1);
       } else if (st.mode === 'on' && st.h > 1) {
-        drawFlameShape(x + T / 2, y, st.h, 1);
+        // la flamme grandit par étapes jusqu'à sa taille maximale (et redescend à l'extinction)
+        const r = st.h / FLAME_MAX_H;
+        drawFlameShape(x + T / 2, y, r < 0.35 ? 1 : r < 0.75 ? 2 : 3);
       }
     }
   }
 
-  // flamme néon : couches rouge-rose → orange → jaune, qui ondulent
-  function drawFlameShape(cx, baseY, h, scaleW) {
-    const wob = Math.sin(frame * 0.6 + cx) * 3;
-    const layers = [
-      { w: 12 * scaleW, h: h, c: '#ff5566' },
-      { w: 8 * scaleW, h: h * 0.74, c: '#ff9f1a' },
-      { w: 4.5 * scaleW, h: h * 0.45, c: '#ffd400' }
-    ];
+  // Flamme en pixel art (rouge-orangé, cœur blanc, langues qui vacillent), en 4 étapes :
+  // 0 étincelle, 1 petite flamme (alerte) ; 2 boule de feu, 3 grande flamme (allumée).
+  // La grande flamme fait FLAME_MAX_H de haut : le dessin couvre toute la zone qui brûle.
+  const FLAME_COLORS = { R: '#ff3b0f', O: '#ff7a2a', P: '#ffb27a', W: '#fffaf0' };
+  const FLAME_STAGES = [
+    { px: 2, rows: [
+      '...R...',
+      '..RR.R.',
+      '.RROR..',
+      'RROPORR',
+      'RRPWPRR',
+      '.RRRRR.'] },
+    { px: 2, rows: [
+      '....R....',
+      '...RR.R..',
+      '.R.RRRR..',
+      '.RRROORR.',
+      'RRROOPORR',
+      'RROPPWPOR',
+      'RROPWWPOR',
+      '.RROPPORR',
+      '..RRRRRR.'] },
+    { px: 2, rows: [
+      '.....R.......',
+      '..R..RR..R...',
+      '..RR.RRR.RR..',
+      '.RRRRRORRRR.R',
+      '.RRROORRORRRR',
+      'RRROOOOOOORRR',
+      'RROOPPOPPOORR',
+      'RROPPWPWPPORR',
+      'RROPWWWWWPORR',
+      'RROPPWWWPPORR',
+      '.RROOPPPOORR.',
+      '...RRRRRRR...'] },
+    { px: 54 / 22, rows: [
+      '......R......',
+      '......R......',
+      '.....RR......',
+      '.....RRR.....',
+      '..R..RRR..R..',
+      '..R.RRRRR.R..',
+      '..RRRRORRRR..',
+      '.RRRROOORRR..',
+      '.RRROOOORRRR.',
+      '.RRROOPOORRR.',
+      'RRROOPPPOORRR',
+      'RROOPPPPPOORR',
+      'RROOPPWPPOORR',
+      'RROPPWWWPPORR',
+      'RROPPWWWWPORR',
+      'RROPWWWWWPORR',
+      'RROPPWWWWPORR',
+      'RROOPWWWPPORR',
+      '.RROOPPPPOOR.',
+      '.RRROOOOORRR.',
+      '..RRRROORRR..',
+      '....RRRRR....'] }
+  ];
+  // 2e image de chaque étape : langues inversées (la flamme vacille)
+  FLAME_STAGES.forEach((st) => { st.mirror = st.rows.map((row) => row.split('').reverse().join('')); });
+  function drawFlameShape(cx, baseY, stage) {
+    const st = FLAME_STAGES[stage], px = st.px;
+    const rows = Math.floor(frame / 5 + cx) % 2 ? st.rows : st.mirror;
+    const cols = rows[0].length;
+    const x0 = Math.round(cx - cols * px / 2), y0 = baseY - rows.length * px;
     ctx.save();
-    ctx.shadowColor = '#ff5566';
-    ctx.shadowBlur = 16;
-    for (const l of layers) {
-      ctx.fillStyle = l.c;
-      ctx.beginPath();
-      ctx.moveTo(cx - l.w, baseY);
-      ctx.quadraticCurveTo(cx - l.w * 1.1, baseY - l.h * 0.55, cx + wob * (l.h / h), baseY - l.h);
-      ctx.quadraticCurveTo(cx + l.w * 1.1, baseY - l.h * 0.55, cx + l.w, baseY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.shadowBlur = 0;
+    ctx.shadowColor = 'rgba(255,59,15,0.8)';
+    ctx.shadowBlur = 6 + stage * 3;
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < cols; c++) {
+        const ch = rows[r][c];
+        if (ch === '.') continue;
+        ctx.fillStyle = FLAME_COLORS[ch];
+        ctx.fillRect(x0 + c * px, y0 + r * px, Math.ceil(px), Math.ceil(px));
+      }
+      ctx.shadowBlur = 0; // halo seulement sur la première rangée : léger et peu coûteux
     }
     ctx.restore();
   }
