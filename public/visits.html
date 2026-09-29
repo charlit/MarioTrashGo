@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrashGO World — Visites</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0d0d12;
+    color: #eee;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+  }
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+  }
+  h1 {
+    color: #ff2fa0;
+    font-size: 22px;
+    letter-spacing: 1px;
+    margin: 0 0 4px;
+  }
+  h1 span { color: #7fffd4; }
+  .subtitle {
+    color: #888;
+    font-size: 12px;
+    margin: 0 0 20px;
+  }
+
+  /* --- écran de connexion --- */
+  #loginScreen {
+    max-width: 420px;
+    margin: 80px auto;
+    background: #1a1a2e;
+    border: 3px solid #ff2fa0;
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+  }
+  #loginScreen h1 { text-align: center; }
+  #loginScreen p { color: #aaa; font-size: 13px; }
+  #keyInput {
+    width: 100%;
+    padding: 10px;
+    margin: 14px 0;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid #7fffd4;
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .btn {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 4px;
+    border: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  .btn-primary { background: #ff2fa0; color: #1a1a2e; }
+  .btn-primary:hover { background: #ff5cb8; }
+  .btn-ghost {
+    background: transparent;
+    color: #7fffd4;
+    border: 2px solid #7fffd4;
+  }
+  .btn-ghost:hover { background: rgba(127,255,212,0.1); }
+  #loginError {
+    color: #ff5566;
+    font-size: 12px;
+    min-height: 16px;
+    margin-top: 4px;
+  }
+
+  /* --- dashboard --- */
+  #dashboard { display: none; }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  #searchInput {
+    flex: 1 1 220px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid #333;
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  #searchInput:focus { border-color: #7fffd4; outline: none; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .statCard {
+    background: #1a1a2e;
+    border: 2px solid #333;
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .statCard .val {
+    font-size: 22px;
+    color: #ffd400;
+    font-weight: bold;
+    line-height: 1.1;
+  }
+  .statCard .label {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+  }
+
+  .breakdowns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .breakdown {
+    background: #1a1a2e;
+    border: 2px solid #333;
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .breakdown h3 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: #7fffd4;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .breakdown .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+  .breakdown .row .name { flex: 0 0 90px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .breakdown .row .bar-bg { flex: 1; background: rgba(255,255,255,0.06); border-radius: 3px; height: 8px; overflow: hidden; }
+  .breakdown .row .bar-fill { height: 100%; background: linear-gradient(90deg, #ff2fa0, #ffd400); }
+  .breakdown .row .count { flex: 0 0 28px; text-align: right; color: #888; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #1a1a2e;
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  thead th {
+    background: rgba(255,47,160,0.15);
+    color: #ff2fa0;
+    text-align: left;
+    padding: 9px 10px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    border-bottom: 2px solid #ff2fa0;
+  }
+  thead th:hover { background: rgba(255,47,160,0.28); }
+  thead th .arrow { color: #7fffd4; margin-left: 3px; }
+  tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    color: #ddd;
+    white-space: nowrap;
+  }
+  tbody tr:hover { background: rgba(127,255,212,0.06); }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+  .deviceTag {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+  }
+  .deviceTag.Mobile { background: rgba(255,47,160,0.2); color: #ff2fa0; }
+  .deviceTag.Tablette { background: rgba(255,212,0,0.2); color: #ffd400; }
+  .deviceTag.Ordinateur { background: rgba(127,255,212,0.2); color: #7fffd4; }
+
+  .tableWrap { overflow-x: auto; border: 2px solid #333; border-radius: 6px; }
+  .empty { text-align: center; color: #666; padding: 40px 0; font-size: 13px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .rowCount { color: #666; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <h1>Trash<span>GO</span></h1>
+  <p>Journal des visites — entre ta clé pour consulter les données.</p>
+  <input type="password" id="keyInput" placeholder="VISITS_KEY" autocomplete="off">
+  <div id="loginError"></div>
+  <button class="btn btn-primary" id="loginBtn">Voir les visites</button>
+</div>
+
+<div class="wrap" id="dashboard">
+  <div class="topbar">
+    <div>
+      <h1>Trash<span>GO</span> — Visites</h1>
+      <p class="subtitle">Journal des visites, mis à jour en direct depuis api/visits</p>
+    </div>
+    <button class="btn btn-ghost" id="logoutBtn">Changer de clé</button>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+  <div class="breakdowns" id="breakdownsRow"></div>
+
+  <div class="toolbar">
+    <input type="text" id="searchInput" placeholder="Filtrer (ville, pays, OS, navigateur, IP...)">
+    <span class="rowCount" id="rowCount"></span>
+  </div>
+
+  <div class="tableWrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="timestamp">Date</th>
+          <th data-key="ville">Ville</th>
+          <th data-key="pays">Pays</th>
+          <th data-key="deviceType">Appareil</th>
+          <th data-key="os">OS</th>
+          <th data-key="browser">Navigateur</th>
+          <th data-key="ecran">Écran</th>
+          <th data-key="langue">Langue</th>
+          <th data-key="ip">IP</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="emptyMsg" style="display:none;">Aucune visite ne correspond à ce filtre.</div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'trashgo_world_visits_key';
+  const loginScreen = document.getElementById('loginScreen');
+  const dashboard = document.getElementById('dashboard');
+  const keyInput = document.getElementById('keyInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const searchInput = document.getElementById('searchInput');
+  const tableBody = document.getElementById('tableBody');
+  const rowCountEl = document.getElementById('rowCount');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const statsRow = document.getElementById('statsRow');
+  const breakdownsRow = document.getElementById('breakdownsRow');
+
+  let allVisits = [];
+  let sortKey = 'timestamp';
+  let sortDir = -1; // -1 = plus récent d'abord
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  async function loadVisits(key) {
+    loginError.textContent = '';
+    const res = await fetch('api/visits?key=' + encodeURIComponent(key));
+    if (res.status === 401) {
+      throw new Error('Clé invalide.');
+    }
+    if (!res.ok) {
+      throw new Error('Erreur serveur (' + res.status + ').');
+    }
+    return res.json();
+  }
+
+  function computeStats(visits) {
+    const countBy = (field) => {
+      const m = new Map();
+      for (const v of visits) {
+        const k = v[field] || 'Inconnu';
+        m.set(k, (m.get(k) || 0) + 1);
+      }
+      return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    };
+    const villes = new Set(visits.map(v => v.ville).filter(x => x && x !== 'Inconnue'));
+    const pays = countBy('pays');
+    const devices = countBy('deviceType');
+    const os = countBy('os');
+    const browsers = countBy('browser');
+    return { villes, pays, devices, os, browsers };
+  }
+
+  function renderStats(visits) {
+    const stats = computeStats(visits);
+    const topPays = stats.pays[0] ? stats.pays[0][0] : '—';
+    const topOs = stats.os[0] ? stats.os[0][0] : '—';
+    const cards = [
+      { val: visits.length, label: 'Visites totales' },
+      { val: stats.villes.size, label: 'Villes distinctes' },
+      { val: stats.pays.length, label: 'Pays distincts' },
+      { val: topPays, label: 'Pays principal' },
+      { val: topOs, label: 'OS principal' }
+    ];
+    statsRow.innerHTML = cards.map(c =>
+      '<div class="statCard"><div class="val">' + esc(c.val) + '</div><div class="label">' + esc(c.label) + '</div></div>'
+    ).join('');
+
+    const renderBreakdown = (title, entries) => {
+      const max = entries.length ? entries[0][1] : 1;
+      const rows = entries.slice(0, 6).map(([name, count]) =>
+        '<div class="row"><span class="name" title="' + esc(name) + '">' + esc(name) + '</span>' +
+        '<span class="bar-bg"><span class="bar-fill" style="width:' + Math.round(count / max * 100) + '%"></span></span>' +
+        '<span class="count">' + count + '</span></div>'
+      ).join('') || '<div class="row"><span class="name">—</span></div>';
+      return '<div class="breakdown"><h3>' + esc(title) + '</h3>' + rows + '</div>';
+    };
+    breakdownsRow.innerHTML =
+      renderBreakdown('Appareil', stats.devices) +
+      renderBreakdown('OS', stats.os) +
+      renderBreakdown('Navigateur', stats.browsers) +
+      renderBreakdown('Pays', stats.pays);
+  }
+
+  function applyFilterAndSort() {
+    const q = searchInput.value.trim().toLowerCase();
+    let rows = allVisits;
+    if (q) {
+      rows = rows.filter(v =>
+        [v.ville, v.pays, v.os, v.browser, v.deviceType, v.ip, v.langue].some(f =>
+          String(f || '').toLowerCase().includes(q)
+        )
+      );
+    }
+    rows = rows.slice().sort((a, b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'timestamp') { av = new Date(av).getTime() || 0; bv = new Date(bv).getTime() || 0; }
+      else { av = String(av || '').toLowerCase(); bv = String(bv || '').toLowerCase(); }
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+    renderTable(rows);
+    renderStats(allVisits);
+  }
+
+  function renderTable(rows) {
+    rowCountEl.textContent = rows.length + ' / ' + allVisits.length + ' visite(s)';
+    emptyMsg.style.display = rows.length ? 'none' : 'block';
+    tableBody.innerHTML = rows.map(v => (
+      '<tr>' +
+      '<td>' + esc(v.heureFrancaise || v.timestamp || '') + '</td>' +
+      '<td>' + esc(v.ville) + '</td>' +
+      '<td>' + esc(v.pays) + '</td>' +
+      '<td><span class="deviceTag ' + esc(v.deviceType) + '">' + esc(v.deviceType) + '</span></td>' +
+      '<td>' + esc(v.os) + '</td>' +
+      '<td>' + esc(v.browser) + '</td>' +
+      '<td>' + esc(v.ecran) + '</td>' +
+      '<td>' + esc(v.langue) + '</td>' +
+      '<td>' + esc(v.ip) + '</td>' +
+      '</tr>'
+    )).join('');
+  }
+
+  document.querySelectorAll('thead th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (sortKey === key) sortDir *= -1;
+      else { sortKey = key; sortDir = key === 'timestamp' ? -1 : 1; }
+      document.querySelectorAll('thead th .arrow').forEach(a => a.remove());
+      th.innerHTML += '<span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>';
+      applyFilterAndSort();
+    });
+  });
+
+  searchInput.addEventListener('input', applyFilterAndSort);
+
+  async function tryLogin(key) {
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Chargement...';
+    try {
+      allVisits = await loadVisits(key);
+      localStorage.setItem(STORAGE_KEY, key);
+      loginScreen.style.display = 'none';
+      dashboard.style.display = 'block';
+      applyFilterAndSort();
+    } catch (e) {
+      loginError.textContent = e.message || 'Erreur de connexion.';
+      localStorage.removeItem(STORAGE_KEY);
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Voir les visites';
+    }
+  }
+
+  loginBtn.addEventListener('click', () => {
+    const key = keyInput.value.trim();
+    if (!key) { loginError.textContent = 'Entre une clé.'; return; }
+    tryLogin(key);
+  });
+  keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
+
+  logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem(STORAGE_KEY);
+    dashboard.style.display = 'none';
+    loginScreen.style.display = 'block';
+    keyInput.value = '';
+    keyInput.focus();
+  });
+
+  const savedKey = localStorage.getItem(STORAGE_KEY);
+  if (savedKey) {
+    keyInput.value = savedKey;
+    tryLogin(savedKey);
+  }
+})();
+</script>
+</body>
+</html>
