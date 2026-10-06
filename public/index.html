@@ -413,7 +413,7 @@
     right: 0;
     bottom: 0;
     width: auto;
-    height: calc(100% * 172 / 750);
+    height: calc(100% * 172 / var(--canvas-h));   /* 172 px du canvas, quelle que soit sa hauteur */
     padding: 0 5cqw 4px;
     background: none;
     border: none;
@@ -4788,15 +4788,27 @@
   try { touchScreen.addEventListener('change', placeSysButtons); } catch (e) {}
 
   // Téléphone en portrait : la manette passe DANS l'écran de jeu, posée sur un
-  // sous-sol de 130 px ajouté sous le niveau. En paysage / sur ordinateur, on revient
-  // à la mise en page normale (poignées latérales / pas de manette).
-  const PAD_EXTRA = 130;
+  // sous-sol ajouté sous le niveau. Le sous-sol fait au moins 130 px et grandit pour
+  // que le jeu remplisse toute la hauteur de l'écran. En paysage / sur ordinateur, on
+  // revient à la mise en page normale (poignées latérales / pas de manette).
+  const PAD_EXTRA = 130, PAD_EXTRA_MAX = 420;
   const landscape = window.matchMedia('(orientation: landscape)');
   const padEl = document.getElementById('pad');
+  const safeProbe = document.createElement('div');   // mesure les marges de l'encoche / barre d'accueil
+  safeProbe.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)';
+  document.body.appendChild(safeProbe);
+  function padExtra() {
+    const cs = getComputedStyle(safeProbe);
+    const freeH = innerHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 16;   // cf. --stage-w
+    const shownW = Math.min(innerWidth - 16, 460);
+    return Math.min(Math.max(Math.floor(W * freeH / shownW) - H, PAD_EXTRA), PAD_EXTRA_MAX);
+  }
   function applyLayout() {
     const inGame = touchScreen.matches && !landscape.matches;
-    const h = H + (inGame ? PAD_EXTRA : 0);
+    const h = H + (inGame ? padExtra() : 0);
     if (canvas.height !== h) canvas.height = h;
+    if (inGame) document.documentElement.style.setProperty('--canvas-h', h);
+    else document.documentElement.style.removeProperty('--canvas-h');
     document.documentElement.classList.toggle('pad-in-game', inGame);
     if (inGame) { if (padEl.parentElement !== stageEl) stageEl.appendChild(padEl); }
     else if (padEl.parentElement !== document.body) document.body.appendChild(padEl);
@@ -4806,6 +4818,7 @@
     touchScreen.addEventListener('change', applyLayout);
     landscape.addEventListener('change', applyLayout);
   } catch (e) {}
+  addEventListener('resize', applyLayout);   // barre d'adresse qui se replie, rotation…
 
   // croix ◀ ▶ : chaque doigt posé dessus compte selon le côté où il se trouve,
   // et on peut glisser d'un côté à l'autre sans lever le pouce
